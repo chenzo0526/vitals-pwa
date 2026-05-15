@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { wrapSystemPrompt } from './disclaimer'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
@@ -44,14 +45,36 @@ export const PHYSIQUE_ANALYSIS_PROMPT = `Analyze this body progress photo object
   "notes": string
 }`
 
+export const BLOODWORK_PARSE_PROMPT = `Extract every marker from this bloodwork report. Return ONLY valid JSON:
+{
+  "panel_name": string,
+  "lab_provider": string | null,
+  "drawn_on": string | null,
+  "markers": [
+    {
+      "marker": string,
+      "category": "hormones" | "metabolic" | "lipids" | "cbc" | "thyroid" | "vitamins" | "liver" | "kidney" | "inflammation" | "other",
+      "value": number,
+      "unit": string,
+      "ref_low": number | null,
+      "ref_high": number | null,
+      "flag": "low" | "normal" | "high" | "critical",
+      "raw_text": string
+    }
+  ],
+  "confidence": "high" | "medium" | "low"
+}
+Extract every marker visible. If reference range missing, set ref_low and ref_high to null. Determine flag from value vs ref range.`
+
 export async function analyzeImageWithClaude(
   base64Image: string,
   mediaType: 'image/jpeg' | 'image/png' | 'image/webp',
-  prompt: string
+  prompt: string,
+  model: string = 'claude-sonnet-4-5'
 ): Promise<string> {
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
-    max_tokens: 1024,
+    model,
+    max_tokens: 2048,
     messages: [
       {
         role: 'user',
@@ -98,7 +121,6 @@ Input: "${text}"`,
       },
     ],
   })
-
   const content = response.content[0]
   if (content.type === 'text') return content.text
   return ''
@@ -124,7 +146,29 @@ Input: "${text}"`,
       },
     ],
   })
+  const content = response.content[0]
+  if (content.type === 'text') return content.text
+  return ''
+}
 
+// Recommendation-generating helper: wraps the system prompt with legal guardrails.
+export async function generateRecommendationWithClaude(
+  taskPrompt: string,
+  userDataContext: string,
+  model: string = 'claude-sonnet-4-5',
+  maxTokens: number = 2048
+): Promise<string> {
+  const response = await anthropic.messages.create({
+    model,
+    max_tokens: maxTokens,
+    system: wrapSystemPrompt(taskPrompt),
+    messages: [
+      {
+        role: 'user',
+        content: userDataContext,
+      },
+    ],
+  })
   const content = response.content[0]
   if (content.type === 'text') return content.text
   return ''
