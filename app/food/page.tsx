@@ -98,7 +98,7 @@ export default function FoodPage() {
     <div className="px-4 pt-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Snap Plate</h1>
-        <Badge variant="outline" className="border-amber-400/30 text-amber-400 text-xs">Claude Vision</Badge>
+        <Badge variant="outline" className="border-amber-400/30 text-amber-400 text-xs">AI Vision</Badge>
       </div>
 
       {/* Camera Input */}
@@ -130,7 +130,7 @@ export default function FoodPage() {
         <Card className="border-white/10 bg-white/5">
           <CardContent className="py-6 flex items-center justify-center gap-3">
             <Loader2 size={20} className="animate-spin text-amber-400" />
-            <p className="text-white/60">Analyzing plate with Claude…</p>
+            <p className="text-white/60">Analyzing plate with AI…</p>
           </CardContent>
         </Card>
       )}

@@ -98,13 +98,13 @@ export default function ProgressPage() {
       <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
         <Lock size={14} className="text-green-400 flex-shrink-0" />
         <p className="text-green-300 text-xs">
-          <strong>Private — your eyes + Claude only.</strong> Photos are piped directly to Claude and immediately discarded. Zero image persistence.
+          <strong>Private — your eyes only.</strong> Photos are sent to AI for analysis and immediately discarded. Zero image persistence.
         </p>
       </div>
 
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Physique Check</h1>
-        <Badge variant="outline" className="border-rose-400/30 text-rose-400 text-xs">Claude Vision</Badge>
+        <Badge variant="outline" className="border-rose-400/30 text-rose-400 text-xs">AI Vision</Badge>
       </div>
 
       {/* Upload */}
@@ -121,7 +121,7 @@ export default function ProgressPage() {
         <Card className="border-white/10 bg-white/5">
           <CardContent className="py-6 flex items-center justify-center gap-3">
             <Loader2 size={20} className="animate-spin text-rose-400" />
-            <p className="text-white/60">Claude analyzing… photo will be discarded</p>
+            <p className="text-white/60">AI analyzing… photo will be discarded</p>
           </CardContent>
         </Card>
       )}

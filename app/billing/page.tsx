@@ -11,9 +11,27 @@ import { Check, Sparkles, Crown, Loader2, AlertTriangle } from 'lucide-react'
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 
 const FEATURES = {
-  free: ['Basic logging', '7-day history', 'Up to 3 substances', 'Food vision (Haiku, 30/mo)'],
-  pro: ['Everything in Free', 'Weekly Sonnet 4.5 rediagnosis', '3 bloodwork uploads/yr', 'Unlimited substances', 'Unlimited history', 'Food vision via Sonnet'],
-  premium: ['Everything in Pro', 'Monthly Opus 4.7 rediagnosis', 'Unlimited bloodwork', 'Body composition deep analysis', 'Daily AI nudges'],
+  free: [
+    'Basic logging',
+    '7-day history',
+    'Up to 3 substances',
+    'Basic image-based food logging (30/mo cap)',
+  ],
+  pro: [
+    'Everything in Free',
+    'Standard AI insights — weekly cadence',
+    '3 bloodwork uploads/yr',
+    'Unlimited substances',
+    'Unlimited history',
+    'Unlimited image-based food logging with detailed macro breakdown',
+  ],
+  premium: [
+    'Everything in Pro',
+    'Monthly deep-dive AI analysis',
+    'Daily AI nudges',
+    'Advanced body composition insights',
+    'Unlimited bloodwork',
+  ],
 }
 
 export default function BillingPage() {

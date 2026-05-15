@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -10,29 +10,33 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
-import { Check, ChevronRight, ChevronLeft, Sparkles, Heart, Camera, FlaskConical, Activity, Droplet, Target } from 'lucide-react'
+import {
+  Check, ChevronRight, ChevronLeft, Sparkles, Heart, Camera,
+  FlaskConical, Activity, Droplet, Target,
+} from 'lucide-react'
 
 const STEPS = [
-  { idx: 0, key: 'consent', title: 'Consent', sec: 60, icon: Heart },
-  { idx: 1, key: 'identity', title: 'Identity', sec: 60, icon: Sparkles },
-  { idx: 2, key: 'snapshot', title: 'Snapshot', sec: 90, icon: Camera },
-  { idx: 3, key: 'stack', title: 'Stack', sec: 60, icon: FlaskConical },
-  { idx: 4, key: 'rhythm', title: 'Rhythm', sec: 45, icon: Activity },
-  { idx: 5, key: 'bloodwork', title: 'Bloodwork', sec: 45, icon: Droplet },
-  { idx: 6, key: 'goal', title: 'First Goal', sec: 30, icon: Target },
-]
+  { idx: 0, key: 'consent',   title: 'Consent',    sec: 60, icon: Heart },
+  { idx: 1, key: 'identity',  title: 'Identity',   sec: 60, icon: Sparkles },
+  { idx: 2, key: 'snapshot',  title: 'Snapshot',   sec: 90, icon: Camera },
+  { idx: 3, key: 'stack',     title: 'Stack',      sec: 60, icon: FlaskConical },
+  { idx: 4, key: 'rhythm',    title: 'Rhythm',     sec: 45, icon: Activity },
+  { idx: 5, key: 'bloodwork', title: 'Bloodwork',  sec: 45, icon: Droplet },
+  { idx: 6, key: 'goal',      title: 'First Goal', sec: 30, icon: Target },
+] as const
+
+const OPTIONAL_STEPS = new Set([2, 3, 5]) // Snapshot, Stack, Bloodwork — skippable
 
 function haptic() {
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    navigator.vibrate(20)
-  }
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(20)
 }
 
 function celebrate() {
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    navigator.vibrate([20, 40, 60])
-  }
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate([20, 40, 60])
 }
+
+type HeightUnit = 'imperial' | 'metric'
+type WeightUnit = 'lb' | 'kg'
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -41,7 +45,19 @@ export default function OnboardingPage() {
   const [done, setDone] = useState(false)
 
   const [consentChecks, setConsentChecks] = useState({ terms: false, privacy: false, notMedical: false })
-  const [identity, setIdentity] = useState({ display_name: '', age: '', weight_lb: '', height_in: '' })
+
+  const [displayName, setDisplayName] = useState('')
+  const [age, setAge] = useState('')
+
+  const [heightUnit, setHeightUnit] = useState<HeightUnit>('imperial')
+  const [heightFt, setHeightFt] = useState('')
+  const [heightIn, setHeightIn] = useState('')
+  const [heightCm, setHeightCm] = useState('')
+
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>('lb')
+  const [weightLb, setWeightLb] = useState('')
+  const [weightKg, setWeightKg] = useState('')
+
   const [snapshotNotes, setSnapshotNotes] = useState('')
   const [stackNotes, setStackNotes] = useState('')
   const [rhythm, setRhythm] = useState({ training_days_per_week: '', avg_sleep_hours: '' })
@@ -52,12 +68,35 @@ export default function OnboardingPage() {
   const allConsent = consentChecks.terms && consentChecks.privacy && consentChecks.notMedical
   const pct = ((step + 1) / STEPS.length) * 100
 
-  async function next() {
-    haptic()
-    if (step === 0) await saveConsent()
-    if (step < STEPS.length - 1) setStep(step + 1)
-    else await finish()
-  }
+  // Internal canonical values (cm, kg) for storage.
+  const computedHeightCm = useMemo(() => {
+    if (heightUnit === 'imperial') {
+      const ft = Number(heightFt) || 0
+      const inch = Number(heightIn) || 0
+      if (!ft && !inch) return null
+      return Math.round(((ft * 12) + inch) * 2.54 * 10) / 10
+    }
+    const cm = Number(heightCm)
+    return cm > 0 ? Math.round(cm * 10) / 10 : null
+  }, [heightUnit, heightFt, heightIn, heightCm])
+
+  const computedWeightKg = useMemo(() => {
+    if (weightUnit === 'lb') {
+      const lb = Number(weightLb)
+      return lb > 0 ? Math.round(lb * 0.45359237 * 10) / 10 : null
+    }
+    const kg = Number(weightKg)
+    return kg > 0 ? Math.round(kg * 10) / 10 : null
+  }, [weightUnit, weightLb, weightKg])
+
+  const stepValid = useMemo(() => {
+    switch (step) {
+      case 0: return allConsent
+      case 1: return Boolean(displayName.trim())
+      case 6: return Boolean(goal.trim())
+      default: return true
+    }
+  }, [step, allConsent, displayName, goal])
 
   function back() {
     haptic()
@@ -67,7 +106,16 @@ export default function OnboardingPage() {
   function skip() {
     haptic()
     if (step < STEPS.length - 1) setStep(step + 1)
-    else finish()
+  }
+
+  async function next() {
+    haptic()
+    if (step === 0) await saveConsent()
+    if (step < STEPS.length - 1) {
+      setStep(step + 1)
+    } else {
+      await finish()
+    }
   }
 
   async function saveConsent() {
@@ -86,6 +134,14 @@ export default function OnboardingPage() {
   async function finish() {
     setSubmitting(true)
     try {
+      const identityData = {
+        display_name: displayName,
+        age: age ? Number(age) : null,
+        height_cm: computedHeightCm,
+        weight_kg: computedWeightKg,
+        height_unit_pref: heightUnit,
+        weight_unit_pref: weightUnit,
+      }
       await supabase.from('onboarding_progress').upsert({
         step_identity_at: new Date().toISOString(),
         step_snapshot_at: new Date().toISOString(),
@@ -94,16 +150,19 @@ export default function OnboardingPage() {
         step_bloodwork_at: new Date().toISOString(),
         step_goal_at: new Date().toISOString(),
         completed_at: new Date().toISOString(),
-        identity_data: identity,
+        identity_data: identityData,
         rhythm_data: rhythm,
         first_goal: goal,
         thirty_day_checkpoint: checkpoint,
       })
-      if (identity.display_name) {
-        await supabase.from('user_profile').update({
-          display_name: identity.display_name,
-          onboarding_completed_at: new Date().toISOString(),
-        }).eq('id', (await supabase.auth.getUser()).data.user?.id || '')
+      if (displayName) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user?.id) {
+          await supabase.from('user_profile').update({
+            display_name: displayName,
+            onboarding_completed_at: new Date().toISOString(),
+          }).eq('id', user.id)
+        }
       }
     } catch {}
     celebrate()
@@ -115,8 +174,7 @@ export default function OnboardingPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
         <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          initial={{ scale: 0 }} animate={{ scale: 1 }}
           transition={{ type: 'spring', stiffness: 200, damping: 12 }}
         >
           <div className="w-20 h-20 rounded-full bg-amber-400 flex items-center justify-center mb-6">
@@ -124,18 +182,14 @@ export default function OnboardingPage() {
           </div>
         </motion.div>
         <motion.h1
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-3xl font-bold tracking-tight"
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }} className="text-3xl font-bold tracking-tight"
         >
           Welcome to VITALS.
         </motion.h1>
         <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="text-white/60 mt-3 text-sm max-w-xs"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }} className="text-white/60 mt-3 text-sm max-w-xs"
         >
           Your dashboard is ready. 14-day Pro trial activated.
         </motion.p>
@@ -145,10 +199,12 @@ export default function OnboardingPage() {
 
   const current = STEPS[step]
   const Icon = current.icon
+  const isFinalStep = step === STEPS.length - 1
+  const canSkip = OPTIONAL_STEPS.has(step)
 
   return (
-    <div className="px-4 pt-6 pb-12 space-y-5">
-      {/* Header with progress */}
+    <div className="px-4 pt-6 pb-28 space-y-5">
+      {/* Header with progress + dot breadcrumbs */}
       <div className="space-y-3">
         <div className="flex items-center justify-between text-xs">
           <span className="text-white/40 uppercase tracking-wider">
@@ -184,9 +240,7 @@ export default function OnboardingPage() {
             <div className="w-10 h-10 rounded-xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center">
               <Icon className="text-amber-400" size={20} />
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">{current.title}</h1>
-            </div>
+            <h1 className="text-xl font-bold tracking-tight">{current.title}</h1>
           </div>
 
           {step === 0 && (
@@ -219,41 +273,112 @@ export default function OnboardingPage() {
 
           {step === 1 && (
             <Card className="border-white/10 bg-white/5">
-              <CardContent className="pt-5 space-y-3">
+              <CardContent className="pt-5 space-y-4">
                 <div>
-                  <label className="text-xs text-white/50 uppercase tracking-wider">Display name</label>
+                  <label className="text-xs text-white/50 uppercase tracking-wider">Display name *</label>
                   <input
-                    value={identity.display_name}
-                    onChange={(e) => setIdentity({ ...identity, display_name: e.target.value })}
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Vincenzo"
                     className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Age</label>
-                    <input
-                      type="number" value={identity.age}
-                      onChange={(e) => setIdentity({ ...identity, age: e.target.value })}
-                      className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
+
+                <div>
+                  <label className="text-xs text-white/50 uppercase tracking-wider">Age</label>
+                  <input
+                    type="number" value={age} onChange={(e) => setAge(e.target.value)}
+                    className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
+                  />
+                </div>
+
+                {/* Height with unit toggle */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-white/50 uppercase tracking-wider">Height</label>
+                    <UnitToggle
+                      options={[
+                        { value: 'imperial', label: 'ft / in' },
+                        { value: 'metric', label: 'cm' },
+                      ]}
+                      value={heightUnit}
+                      onChange={(v) => setHeightUnit(v as HeightUnit)}
                     />
                   </div>
-                  <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Weight (lb)</label>
-                    <input
-                      type="number" value={identity.weight_lb}
-                      onChange={(e) => setIdentity({ ...identity, weight_lb: e.target.value })}
-                      className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
+                  {heightUnit === 'imperial' ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="relative">
+                        <input
+                          type="number" min={0} max={9} value={heightFt}
+                          onChange={(e) => setHeightFt(e.target.value)}
+                          placeholder="5"
+                          className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-9 py-2 text-sm focus:outline-none focus:border-amber-400/50"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">ft</span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="number" min={0} max={11} value={heightIn}
+                          onChange={(e) => setHeightIn(e.target.value)}
+                          placeholder="10"
+                          className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-9 py-2 text-sm focus:outline-none focus:border-amber-400/50"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">in</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <input
+                        type="number" min={0} max={300} step="0.1" value={heightCm}
+                        onChange={(e) => setHeightCm(e.target.value)}
+                        placeholder="178"
+                        className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-amber-400/50"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">cm</span>
+                    </div>
+                  )}
+                  {computedHeightCm !== null && (
+                    <p className="text-[10px] text-white/30 mt-1">stored as {computedHeightCm} cm</p>
+                  )}
+                </div>
+
+                {/* Weight with unit toggle */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-white/50 uppercase tracking-wider">Weight</label>
+                    <UnitToggle
+                      options={[
+                        { value: 'lb', label: 'lb' },
+                        { value: 'kg', label: 'kg' },
+                      ]}
+                      value={weightUnit}
+                      onChange={(v) => setWeightUnit(v as WeightUnit)}
                     />
                   </div>
-                  <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Height (in)</label>
-                    <input
-                      type="number" value={identity.height_in}
-                      onChange={(e) => setIdentity({ ...identity, height_in: e.target.value })}
-                      className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
-                    />
-                  </div>
+                  {weightUnit === 'lb' ? (
+                    <div className="relative">
+                      <input
+                        type="number" min={0} max={1000} step="0.1" value={weightLb}
+                        onChange={(e) => setWeightLb(e.target.value)}
+                        placeholder="180"
+                        className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-amber-400/50"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">lb</span>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <input
+                        type="number" min={0} max={500} step="0.1" value={weightKg}
+                        onChange={(e) => setWeightKg(e.target.value)}
+                        placeholder="82"
+                        className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-amber-400/50"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">kg</span>
+                    </div>
+                  )}
+                  {computedWeightKg !== null && (
+                    <p className="text-[10px] text-white/30 mt-1">stored as {computedWeightKg} kg</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -283,7 +408,7 @@ export default function OnboardingPage() {
           {step === 3 && (
             <Card className="border-white/10 bg-white/5">
               <CardContent className="pt-5 space-y-3">
-                <p className="text-xs text-white/60">List substances you're currently taking (you'll add details later).</p>
+                <p className="text-xs text-white/60">List substances you&apos;re currently taking (you&apos;ll add details later).</p>
                 <Link
                   href="/substances"
                   className="block text-center py-4 rounded-lg bg-amber-400/10 border border-amber-400/30 text-amber-400 text-sm font-medium hover:bg-amber-400/20 transition-colors"
@@ -351,7 +476,7 @@ export default function OnboardingPage() {
             <Card className="border-white/10 bg-white/5">
               <CardContent className="pt-5 space-y-3">
                 <div>
-                  <label className="text-xs text-white/50 uppercase tracking-wider">One goal for the next 30 days</label>
+                  <label className="text-xs text-white/50 uppercase tracking-wider">One goal for the next 30 days *</label>
                   <Textarea
                     value={goal} onChange={(e) => setGoal(e.target.value)}
                     placeholder="Drop 5lb, hit 200g protein daily, sleep 8h consistently..."
@@ -373,27 +498,60 @@ export default function OnboardingPage() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Footer nav */}
+      {/* Footer nav — Back · (Skip) · Next */}
       <div className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur border-t border-white/10 px-4 py-3">
         <div className="max-w-md mx-auto flex items-center gap-2">
-          {step > 0 && (
-            <Button variant="outline" size="sm" onClick={back} className="border-white/20">
-              <ChevronLeft size={16} />
+          <Button
+            variant="outline"
+            onClick={back}
+            disabled={step === 0}
+            className="border-white/20 text-white/60 disabled:opacity-20"
+          >
+            <ChevronLeft size={16} className="mr-1" /> Back
+          </Button>
+
+          {canSkip && (
+            <Button variant="ghost" onClick={skip} className="text-white/40">
+              Skip
             </Button>
           )}
-          {step > 0 && step < STEPS.length - 1 && (
-            <Button variant="ghost" size="sm" onClick={skip} className="text-white/40">Skip</Button>
-          )}
+
           <Button
             onClick={next}
-            disabled={(step === 0 && !allConsent) || submitting}
+            disabled={!stepValid || submitting}
             className="ml-auto bg-amber-400 text-black hover:bg-amber-300 disabled:opacity-30"
           >
-            {step === STEPS.length - 1 ? (submitting ? 'Finishing…' : 'Finish') : 'Continue'}
+            {isFinalStep
+              ? (submitting ? 'Finishing…' : 'Finish & Enter Vitals')
+              : 'Next'}
             <ChevronRight size={16} className="ml-1" />
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function UnitToggle({
+  options, value, onChange,
+}: {
+  options: Array<{ value: string; label: string }>
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="inline-flex bg-white/5 border border-white/10 rounded-md p-0.5">
+      {options.map(o => (
+        <button
+          key={o.value}
+          onClick={() => { haptic(); onChange(o.value) }}
+          className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
+            value === o.value ? 'bg-amber-400 text-black font-bold' : 'text-white/50 hover:text-white/80'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   )
 }

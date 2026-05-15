@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
 
     const raw = await analyzeImageWithClaude(image, mediaType || 'image/jpeg', LABEL_OCR_PROMPT)
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return NextResponse.json({ error: 'Failed to parse Claude response' }, { status: 500 })
+    if (!jsonMatch) return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 })
 
     const parsed = JSON.parse(jsonMatch[0])
     return NextResponse.json(parsed)

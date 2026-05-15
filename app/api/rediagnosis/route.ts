@@ -99,7 +99,7 @@ User tier: ${tier}. Today: ${new Date().toISOString().split('T')[0]}.`
     const raw = await generateRecommendationWithClaude(TASK_PROMPT, context, model)
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return NextResponse.json({ error: 'Failed to parse Claude response', raw }, { status: 500 })
+      return NextResponse.json({ error: 'Failed to parse AI response', raw }, { status: 500 })
     }
     const parsed = JSON.parse(jsonMatch[0])
 

@@ -96,7 +96,7 @@ export default function VoicePage() {
     <div className="px-4 pt-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Log Voice</h1>
-        <Badge variant="outline" className="border-violet-400/30 text-violet-400 text-xs">Claude Parse</Badge>
+        <Badge variant="outline" className="border-violet-400/30 text-violet-400 text-xs">AI Parse</Badge>
       </div>
 
       {/* Record Button */}
@@ -137,7 +137,7 @@ export default function VoicePage() {
 
       {transcript && !parsed && (
         <Button onClick={parseTranscript} disabled={loading} className="w-full bg-violet-400 text-black font-bold hover:bg-violet-300">
-          {loading ? <><Loader2 size={16} className="mr-2 animate-spin" /> Parsing…</> : 'Parse with Claude'}
+          {loading ? <><Loader2 size={16} className="mr-2 animate-spin" /> Parsing…</> : 'Parse with AI'}
         </Button>
       )}
 

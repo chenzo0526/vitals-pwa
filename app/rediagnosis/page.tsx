@@ -78,7 +78,7 @@ export default function RediagnosisPage() {
         </h1>
         <InlineUpgradeCard
           title="Weekly AI Review is a Pro feature"
-          description="Sonnet 4.5 weekly review (Pro) or Opus 4.7 monthly review (Premium). Reviews your full stack, bloodwork, training, and practices — surfaces 3 wins, 3 leaks, 3 protocol adjustments, and an experiment to run."
+          description="Standard AI insights at weekly cadence (Pro) or monthly deep-dive AI analysis with daily nudges (Premium). Reviews your full stack, bloodwork, training, and practices — surfaces 3 wins, 3 leaks, 3 protocol adjustments, and an experiment to run."
         />
         <Disclaimer />
       </div>
@@ -93,7 +93,7 @@ export default function RediagnosisPage() {
             <Brain className="text-violet-400" size={24} /> Rediagnosis
           </h1>
           <p className="text-xs text-white/40 mt-0.5">
-            {tier === 'premium' ? 'Opus 4.7 · monthly' : 'Sonnet 4.5 · weekly'}
+            {tier === 'premium' ? 'Monthly deep-dive AI analysis' : 'Standard AI insights · weekly cadence'}
           </p>
         </div>
         <Button

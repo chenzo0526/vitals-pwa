@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <p>Data is stored in Supabase (Postgres) with Row-Level Security (RLS) ensuring only you can read your own records. The database is encrypted at rest.</p>
 
       <h2 className="text-lg font-semibold pt-3">3. AI Processing</h2>
-      <p>When you use AI features (food/bloodwork/physique vision, rediagnosis), the relevant data is sent to Anthropic's Claude API for inference. Anthropic does not retain user data for training under their commercial terms. Each AI recommendation is logged for your audit trail.</p>
+      <p>When you use AI features (food/bloodwork/physique vision, rediagnosis), the relevant data is sent to our third-party AI inference provider. The provider does not retain user data for training under their commercial terms. Each AI recommendation is logged for your audit trail.</p>
 
       <h2 className="text-lg font-semibold pt-3">4. Payments</h2>
       <p>Stripe processes payments. We do not store credit card numbers. We store your Stripe customer ID and subscription metadata only.</p>
