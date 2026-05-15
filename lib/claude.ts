@@ -1,0 +1,133 @@
+import Anthropic from '@anthropic-ai/sdk'
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY || '',
+})
+
+export const FOOD_ANALYSIS_PROMPT = `Identify all foods visible on this plate with estimated quantities. Return ONLY valid JSON:
+{
+  "items": [
+    {"name": string, "qty_estimate": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number}
+  ],
+  "total_macros": {"calories": number, "protein_g": number, "carbs_g": number, "fat_g": number},
+  "confidence": "high" | "medium" | "low",
+  "notes": string
+}`
+
+export const LABEL_OCR_PROMPT = `Extract all nutrition facts from this food label. Return ONLY valid JSON:
+{
+  "product_name": string,
+  "serving_size": string,
+  "servings_per_container": number | null,
+  "calories": number,
+  "protein_g": number,
+  "carbs_g": number,
+  "fat_g": number,
+  "fiber_g": number | null,
+  "sugar_g": number | null,
+  "sodium_mg": number | null,
+  "confidence": "high" | "medium" | "low"
+}`
+
+export const PHYSIQUE_ANALYSIS_PROMPT = `Analyze this body progress photo objectively and scientifically. Return ONLY valid JSON:
+{
+  "estimated_bf_percent": number,
+  "muscle_development": {
+    "chest": number, "back": number, "shoulders": number, "arms": number,
+    "quads": number, "hams": number, "glutes": number, "calves": number, "abs": number
+  },
+  "symmetry_issues": string[],
+  "posture_flags": string[],
+  "top_3_weak_points": string[],
+  "suggested_focus_next_30_days": string,
+  "overall_condition": "cutting" | "maintaining" | "bulking" | "recomping",
+  "notes": string
+}`
+
+export async function analyzeImageWithClaude(
+  base64Image: string,
+  mediaType: 'image/jpeg' | 'image/png' | 'image/webp',
+  prompt: string
+): Promise<string> {
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 1024,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: base64Image,
+            },
+          },
+          {
+            type: 'text',
+            text: prompt,
+          },
+        ],
+      },
+    ],
+  })
+
+  const content = response.content[0]
+  if (content.type === 'text') return content.text
+  return ''
+}
+
+export async function parseTextWithClaude(text: string): Promise<string> {
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 512,
+    messages: [
+      {
+        role: 'user',
+        content: `Parse this food/meal description and extract nutritional estimates. Return ONLY valid JSON:
+{
+  "items": [
+    {"name": string, "qty_estimate": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number}
+  ],
+  "total_macros": {"calories": number, "protein_g": number, "carbs_g": number, "fat_g": number},
+  "confidence": "high" | "medium" | "low"
+}
+
+Input: "${text}"`,
+      },
+    ],
+  })
+
+  const content = response.content[0]
+  if (content.type === 'text') return content.text
+  return ''
+}
+
+export async function parseWorkoutWithClaude(text: string): Promise<string> {
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 512,
+    messages: [
+      {
+        role: 'user',
+        content: `Parse this workout description and extract exercise sets. Return ONLY valid JSON:
+{
+  "sets": [
+    {"exercise": string, "set_num": number, "reps": number | null, "weight_lb": number | null, "rpe": number | null, "notes": string | null}
+  ],
+  "focus": string,
+  "estimated_duration_min": number | null
+}
+
+Input: "${text}"`,
+      },
+    ],
+  })
+
+  const content = response.content[0]
+  if (content.type === 'text') return content.text
+  return ''
+}
+
+export default anthropic
