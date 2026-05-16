@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Zap, Beef, Wheat, Droplets, Camera, ScanLine, Mic, Dumbbell, TrendingUp, Brain, FlaskConical, Sparkles } from 'lucide-react'
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
+import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 
 const GOALS = { calories: 2400, protein_g: 180, carbs_g: 250, fat_g: 80, water_ml: 3000 }
 
@@ -26,7 +27,7 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchAll() {
       try {
-        const dateStr = new Date().toISOString().split('T')[0]
+        const dateStr = getLocalDateString()
         const { data: { user } } = await supabase.auth.getUser()
         const uid = user?.id
         const [summaryRes, profileRes, onbRes] = await Promise.all([
@@ -38,6 +39,15 @@ export default function HomePage() {
             ? supabase.from('onboarding_progress').select('completed_at').eq('user_id', uid).maybeSingle()
             : Promise.resolve({ data: null }),
         ])
+
+        // Keep stored timezone in sync — auto-detects DST changes and travel.
+        if (uid && profileRes.data) {
+          const tz = getUserTimezone()
+          const stored = (profileRes.data as { timezone?: string }).timezone
+          if (stored !== tz) {
+            await supabase.from('user_profile').update({ timezone: tz }).eq('id', uid)
+          }
+        }
         if (summaryRes.data) {
           setToday({
             calories_total: summaryRes.data.calories_total || 0,

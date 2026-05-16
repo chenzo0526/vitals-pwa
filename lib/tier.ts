@@ -50,6 +50,7 @@ export type UserProfile = {
   current_period_end: string | null
   display_name: string | null
   onboarding_completed_at: string | null
+  timezone: string | null
 }
 
 export async function getUserProfile(): Promise<UserProfile | null> {

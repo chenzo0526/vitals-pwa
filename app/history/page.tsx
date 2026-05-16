@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { History, Flame, Beef, Dumbbell } from 'lucide-react'
+import { getLastNDates, getLocalDateString, parseLocalDate } from '@/lib/dates'
 
 type DaySummary = {
   date: string
@@ -27,13 +28,8 @@ export default function HistoryPage() {
 
   useEffect(() => {
     async function fetch7Days() {
+      const dates = getLastNDates(7)
       try {
-        const dates = Array.from({ length: 7 }, (_, i) => {
-          const d = new Date()
-          d.setDate(d.getDate() - (6 - i))
-          return d.toISOString().split('T')[0]
-        })
-
         const { data } = await supabase
           .from('daily_summary')
           .select('date, calories_total, protein_g_total, workout_count')
@@ -50,12 +46,9 @@ export default function HistoryPage() {
         })
         setSummaries(mapped)
       } catch {
-        // Placeholder: generate empty 7 days
-        const empty = Array.from({ length: 7 }, (_, i) => {
-          const d = new Date()
-          d.setDate(d.getDate() - (6 - i))
-          return { date: d.toISOString().split('T')[0], calories_total: 0, protein_g_total: 0, workout_count: 0 }
-        })
+        const empty = dates.map((date) => ({
+          date, calories_total: 0, protein_g_total: 0, workout_count: 0,
+        }))
         setSummaries(empty)
       } finally {
         setLoading(false)
@@ -90,7 +83,7 @@ export default function HistoryPage() {
                   )}
                 </div>
                 <span className="text-[9px] text-white/30">
-                  {day.date ? dayLabels[new Date(day.date + 'T12:00:00').getDay()] : '—'}
+                  {day.date ? dayLabels[parseLocalDate(day.date).getDay()] : '—'}
                 </span>
               </div>
             ))}
@@ -113,7 +106,7 @@ export default function HistoryPage() {
               <CardContent className="py-3"><div className="h-4 bg-white/10 rounded" /></CardContent>
             </Card>
           )
-          const isToday = day.date === new Date().toISOString().split('T')[0]
+          const isToday = day.date === getLocalDateString()
           return (
             <Card key={day.date} className={`border-white/10 ${isToday ? 'bg-amber-400/5 border-amber-400/20' : 'bg-white/5'}`}>
               <CardContent className="py-3 px-4">
@@ -121,7 +114,7 @@ export default function HistoryPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-white text-sm font-medium">
-                        {new Date(day.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                        {parseLocalDate(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                       </p>
                       {isToday && <Badge className="text-[9px] bg-amber-400/20 text-amber-400 border-amber-400/30 py-0">Today</Badge>}
                     </div>

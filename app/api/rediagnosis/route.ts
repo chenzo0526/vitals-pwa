@@ -3,6 +3,7 @@ import { getServerClient } from '@/lib/supabase-server'
 import { generateRecommendationWithClaude } from '@/lib/claude'
 import { TIER_LIMITS } from '@/lib/tier'
 import { DISCLAIMER_VERSION, RECOMMENDATION_DISCLAIMER } from '@/lib/disclaimer'
+import { getLocalDateString } from '@/lib/dates'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -45,10 +46,14 @@ export async function POST(req: NextRequest) {
     }
     const userId = user.id
 
-    // Pull tier
+    // Pull tier + timezone
     let tier: 'free' | 'pro' | 'premium' = 'pro'
-    const { data: profile } = await supabase.from('user_profile').select('tier').eq('id', userId).maybeSingle()
-    if (profile) tier = (profile as { tier: 'free' | 'pro' | 'premium' }).tier
+    let timezone: string | undefined = undefined
+    const { data: profile } = await supabase.from('user_profile').select('tier, timezone').eq('id', userId).maybeSingle()
+    if (profile) {
+      tier = (profile as { tier: 'free' | 'pro' | 'premium' }).tier
+      timezone = (profile as { timezone?: string }).timezone || undefined
+    }
 
     const limits = TIER_LIMITS[tier]
     if (!limits.rediagnosisAccess) {
@@ -95,7 +100,7 @@ ${(bwMarkers.data || []).slice(0, 40).map((m: { marker: string; value?: number; 
 CUSTOM METRICS LOGS:
 ${(customLogs.data || []).slice(0, 40).map((c: { ts: string; custom_metrics_defs?: { name: string }; value?: number; value_bool?: boolean }) => `- ${c.ts} ${c.custom_metrics_defs?.name}: ${c.value ?? c.value_bool}`).join('\n')}
 
-User tier: ${tier}. Today: ${new Date().toISOString().split('T')[0]}.`
+User tier: ${tier}. Today: ${getLocalDateString(new Date(), timezone)}.`
 
     const raw = await generateRecommendationWithClaude(TASK_PROMPT, context, model)
     const jsonMatch = raw.match(/\{[\s\S]*\}/)

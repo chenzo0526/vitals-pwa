@@ -1,11 +1,12 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { CONSENT_BODY, DISCLAIMER_VERSION } from '@/lib/disclaimer'
+import { getUserTimezone } from '@/lib/dates'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -67,6 +68,16 @@ export default function OnboardingPage() {
 
   const allConsent = consentChecks.terms && consentChecks.privacy && consentChecks.notMedical
   const pct = ((step + 1) / STEPS.length) * 100
+
+  // Stamp the user's browser timezone onto their profile on first onboarding load.
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const tz = getUserTimezone()
+      await supabase.from('user_profile').update({ timezone: tz }).eq('id', user.id)
+    })()
+  }, [])
 
   // Internal canonical values (cm, kg) for storage.
   const computedHeightCm = useMemo(() => {
