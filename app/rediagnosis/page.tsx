@@ -28,20 +28,29 @@ export default function RediagnosisPage() {
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<Record<string, 'accept' | 'skip' | 'already_doing'>>({})
+  const [distinctDays, setDistinctDays] = useState<number>(0)
 
   useEffect(() => { load() }, [])
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const [profRes, repsRes] = await Promise.all([
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const [profRes, repsRes, intakeRes] = await Promise.all([
       supabase.from('user_profile').select('tier').eq('id', user.id).maybeSingle(),
       supabase.from('rediagnosis_reports').select('*').order('ts', { ascending: false }).limit(10),
+      supabase.from('intake_events').select('ts').gte('ts', since),
     ])
     if (profRes.data) setTier((profRes.data as { tier: 'free' | 'pro' | 'premium' }).tier)
     if (repsRes.data && repsRes.data.length > 0) {
       setReport(repsRes.data[0] as Report)
       setHistory(repsRes.data as Report[])
+    }
+    if (intakeRes.data) {
+      const days = new Set(
+        (intakeRes.data as Array<{ ts: string }>).map((r) => r.ts.slice(0, 10)),
+      )
+      setDistinctDays(days.size)
     }
   }
 
@@ -103,13 +112,24 @@ export default function RediagnosisPage() {
         </div>
         <Button
           onClick={run}
-          disabled={running}
-          className="bg-violet-500/20 border border-violet-400/40 text-violet-300 hover:bg-violet-500/30"
+          disabled={running || distinctDays < 3}
+          className="bg-violet-500/20 border border-violet-400/40 text-violet-300 hover:bg-violet-500/30 disabled:opacity-40"
         >
           {running ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
           {running ? 'Running…' : 'Run review'}
         </Button>
       </div>
+
+      {distinctDays < 3 && !report && (
+        <Card className="border-amber-400/30 bg-amber-500/5">
+          <CardContent className="py-3 px-4 flex items-center gap-3">
+            <AlertTriangle size={16} className="text-amber-300 flex-shrink-0" />
+            <p className="text-sm text-amber-100">
+              Need 3+ days of data. You have <span className="font-semibold tabular-nums">{distinctDays}</span>. Keep logging meals daily and your review will unlock.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded-md p-2 flex items-start gap-1.5">

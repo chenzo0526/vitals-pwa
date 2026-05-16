@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { FlaskConical, Plus, X, Calendar, AlertCircle } from 'lucide-react'
 import { TIER_LIMITS } from '@/lib/tier'
 import { InlineUpgradeCard } from '@/components/UpgradeBadge'
+import { EmptyState } from '@/components/EmptyState'
+import { SkeletonRow } from '@/components/Skeleton'
 
 const CATEGORIES: Substance['category'][] = ['hormones', 'peptides', 'prescription', 'supplements', 'cognitive', 'custom']
 const ROUTES = ['oral', 'IM', 'sub-Q', 'topical', 'sublingual', 'inhaled', 'other'] as const
@@ -159,15 +161,19 @@ export default function SubstancesPage() {
         </div>
       ))}
 
-      {!loading && items.length === 0 && (
-        <Card className="border-white/10 bg-white/5">
-          <CardContent className="p-6 text-center">
-            <FlaskConical className="text-white/20 mx-auto mb-3" size={32} />
-            <p className="text-sm text-white/60">No substances tracked yet.</p>
-            <p className="text-xs text-white/40 mt-1">Add your first one — hormones, peptides, Rx, supplements, etc.</p>
-          </CardContent>
-        </Card>
-      )}
+      {loading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)}
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={FlaskConical}
+          title="Build your stack"
+          body="Track meds, supplements, peptides, or compounds. Tap + to add your first one."
+          accent="cyan"
+          cta={{ label: 'Add a substance', onClick: () => { setAdding(true); setEditing({ name: '', category: 'supplements', active: true }) } }}
+        />
+      ) : null}
 
       {/* Edit / Add dialog */}
       {(editing || adding) && (

@@ -8,7 +8,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { supabase, getCurrentUserId } from '@/lib/supabase'
-import { Toast, ToastMsg } from '@/components/Toast'
+import { useToast } from '@/components/Toast'
+import { celebrateConfetti } from '@/lib/confetti'
 
 type ParsedItem = {
   name: string
@@ -31,6 +32,7 @@ const SILENCE_MS = 3000
 
 export default function VoicePage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [recording, setRecording] = useState(false)
   const [transcriptFinal, setTranscriptFinal] = useState('')
   const [transcriptInterim, setTranscriptInterim] = useState('')
@@ -39,7 +41,6 @@ export default function VoicePage() {
   const [logging, setLogging] = useState(false)
   const [logged, setLogged] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [toast, setToast] = useState<ToastMsg | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -150,38 +151,54 @@ export default function VoicePage() {
     }
   }
 
+  async function doInsert(p: Parsed) {
+    const userId = await getCurrentUserId()
+    if (!userId) {
+      router.push('/login?redirect=/voice')
+      throw new Error('Not signed in')
+    }
+    const totals = p.total_macros || sumMacros(p.items)
+    const { error: insertErr } = await supabase.from('intake_events').insert({
+      ts: new Date().toISOString(),
+      item: p.items.map((i) => i.name).join(', '),
+      qty_text: p.items
+        .map((i) => `${i.quantity || ''}${i.unit ? ' ' + i.unit : ''} ${i.name}`.trim())
+        .join(', '),
+      calories: totals.calories,
+      protein_g: totals.protein_g,
+      carbs_g: totals.carbs_g,
+      fat_g: totals.fat_g,
+      raw_input: (finalRef.current || transcriptFinal).trim(),
+      parsed_by: 'voice-parse',
+      user_id: userId,
+    })
+    if (insertErr) throw new Error(insertErr.message)
+  }
+
   async function logEntry() {
     if (!parsed) return
     setLogging(true)
     setError(null)
     try {
-      const userId = await getCurrentUserId()
-      if (!userId) {
-        router.push('/login?redirect=/voice')
-        return
-      }
-      const totals = parsed.total_macros || sumMacros(parsed.items)
-      const { error: insertErr } = await supabase.from('intake_events').insert({
-        ts: new Date().toISOString(),
-        item: parsed.items.map((i) => i.name).join(', '),
-        qty_text: parsed.items
-          .map((i) => `${i.quantity || ''}${i.unit ? ' ' + i.unit : ''} ${i.name}`.trim())
-          .join(', '),
-        calories: totals.calories,
-        protein_g: totals.protein_g,
-        carbs_g: totals.carbs_g,
-        fat_g: totals.fat_g,
-        raw_input: (finalRef.current || transcriptFinal).trim(),
-        parsed_by: 'voice-parse',
-        user_id: userId,
-      })
-      if (insertErr) throw new Error(insertErr.message)
+      await doInsert(parsed)
       setLogged(true)
-      setToast({ id: Date.now(), kind: 'success', text: 'Logged to today' })
+      celebrateConfetti()
+      toast({ kind: 'success', title: 'Logged', text: 'Added to today.' })
+      setTimeout(() => router.push('/'), 1100)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not save log'
       setError(msg)
-      setToast({ id: Date.now(), kind: 'error', text: msg })
+      toast({
+        kind: 'error',
+        title: 'Save failed',
+        text: msg,
+        onRetry: () => doInsert(parsed).then(() => {
+          setLogged(true)
+          celebrateConfetti()
+          toast({ kind: 'success', title: 'Logged', text: 'Added to today.' })
+          setTimeout(() => router.push('/'), 1100)
+        }),
+      })
     } finally {
       setLogging(false)
     }
@@ -191,8 +208,6 @@ export default function VoicePage() {
 
   return (
     <div className="px-4 pt-6 space-y-4">
-      <Toast msg={toast} onDismiss={() => setToast(null)} />
-
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Log Voice</h1>
         <Badge variant="outline" className="border-violet-400/30 text-violet-400 text-xs">AI Parse</Badge>

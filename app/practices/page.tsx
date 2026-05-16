@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Sparkles, Plus, X, Flame, Wind, Sun, Footprints, Brain, HeartHandshake } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
+import { SkeletonRow } from '@/components/Skeleton'
 
 const CATEGORIES = [
   { key: 'thermal', label: 'Thermal', icon: Flame, types: ['Sauna', 'Cold plunge', 'Ice bath', 'Infrared', 'Contrast'] },
@@ -105,14 +107,17 @@ export default function PracticesPage() {
       {/* Recent sessions */}
       <div>
         <p className="text-xs uppercase tracking-wider text-white/40 mb-2">Recent</p>
-        {!loading && sessions.length === 0 ? (
-          <Card className="border-white/10 bg-white/5">
-            <CardContent className="p-6 text-center">
-              <Sparkles className="text-white/20 mx-auto mb-3" size={32} />
-              <p className="text-sm text-white/60">No sessions yet.</p>
-              <p className="text-xs text-white/40 mt-1">Tap a category above to log your first.</p>
-            </CardContent>
-          </Card>
+        {loading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)}
+          </div>
+        ) : sessions.length === 0 ? (
+          <EmptyState
+            icon={Sparkles}
+            title="Add a practice"
+            body="Log sauna, cold plunge, meditation, breathwork, or anything else. Track how mood and energy shift before/after."
+            accent="violet"
+          />
         ) : (
           <div className="space-y-2">
             {sessions.map(s => (

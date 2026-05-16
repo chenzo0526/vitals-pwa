@@ -10,6 +10,7 @@ import { Droplet, Upload, Camera, Loader2, X, AlertTriangle, TrendingUp } from '
 import { TIER_LIMITS } from '@/lib/tier'
 import { InlineUpgradeCard } from '@/components/UpgradeBadge'
 import Disclaimer from '@/components/Disclaimer'
+import { EmptyState } from '@/components/EmptyState'
 
 type MarkerWithDate = BloodworkMarker & { panel_ts?: string }
 
@@ -234,13 +235,12 @@ export default function BloodworkPage() {
       ))}
 
       {panels.length === 0 && (
-        <Card className="border-white/10 bg-white/5">
-          <CardContent className="p-6 text-center">
-            <Droplet className="text-white/20 mx-auto mb-3" size={32} />
-            <p className="text-sm text-white/60">No bloodwork yet.</p>
-            <p className="text-xs text-white/40 mt-1">Upload a lab PDF or photo to get started.</p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Droplet}
+          title="Upload your first labs"
+          body="Upload a recent lab PDF or photo. AI extracts every marker, unit, and reference range, then tracks trends over time."
+          accent="rose"
+        />
       )}
 
       {panels.length > 0 && <Disclaimer />}
