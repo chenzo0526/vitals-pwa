@@ -13,25 +13,24 @@ import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import {
   Check, ChevronRight, ChevronLeft, Sparkles, Heart, Camera,
-  FlaskConical, Activity, Droplet, Target,
+  FlaskConical, Activity, Droplet, Target, AlertTriangle, Loader2, ShieldCheck,
 } from 'lucide-react'
 
 const STEPS = [
-  { idx: 0, key: 'consent',   title: 'Consent',    sec: 60, icon: Heart },
-  { idx: 1, key: 'identity',  title: 'Identity',   sec: 60, icon: Sparkles },
-  { idx: 2, key: 'snapshot',  title: 'Snapshot',   sec: 90, icon: Camera },
-  { idx: 3, key: 'stack',     title: 'Stack',      sec: 60, icon: FlaskConical },
-  { idx: 4, key: 'rhythm',    title: 'Rhythm',     sec: 45, icon: Activity },
-  { idx: 5, key: 'bloodwork', title: 'Bloodwork',  sec: 45, icon: Droplet },
-  { idx: 6, key: 'goal',      title: 'First Goal', sec: 30, icon: Target },
+  { idx: 0, key: 'consent',   title: 'Consent',    sec: 60, icon: Heart,        progressField: 'step_consent_at' as const },
+  { idx: 1, key: 'identity',  title: 'Identity',   sec: 60, icon: Sparkles,     progressField: 'step_identity_at' as const },
+  { idx: 2, key: 'snapshot',  title: 'Snapshot',   sec: 90, icon: Camera,       progressField: 'step_snapshot_at' as const },
+  { idx: 3, key: 'stack',     title: 'Stack',      sec: 60, icon: FlaskConical, progressField: 'step_stack_at' as const },
+  { idx: 4, key: 'rhythm',    title: 'Rhythm',     sec: 45, icon: Activity,     progressField: 'step_rhythm_at' as const },
+  { idx: 5, key: 'bloodwork', title: 'Bloodwork',  sec: 45, icon: Droplet,      progressField: 'step_bloodwork_at' as const },
+  { idx: 6, key: 'goal',      title: 'First Goal', sec: 30, icon: Target,       progressField: 'step_goal_at' as const },
 ] as const
 
-const OPTIONAL_STEPS = new Set([2, 3, 5]) // Snapshot, Stack, Bloodwork — skippable
+const OPTIONAL_STEPS = new Set([2, 3, 5])
 
 function haptic() {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(20)
 }
-
 function celebrate() {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate([20, 40, 60])
 }
@@ -44,17 +43,17 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [resuming, setResuming] = useState(true)
 
   const [consentChecks, setConsentChecks] = useState({ terms: false, privacy: false, notMedical: false })
 
   const [displayName, setDisplayName] = useState('')
   const [age, setAge] = useState('')
-
   const [heightUnit, setHeightUnit] = useState<HeightUnit>('imperial')
   const [heightFt, setHeightFt] = useState('')
   const [heightIn, setHeightIn] = useState('')
   const [heightCm, setHeightCm] = useState('')
-
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('lb')
   const [weightLb, setWeightLb] = useState('')
   const [weightKg, setWeightKg] = useState('')
@@ -69,17 +68,60 @@ export default function OnboardingPage() {
   const allConsent = consentChecks.terms && consentChecks.privacy && consentChecks.notMedical
   const pct = ((step + 1) / STEPS.length) * 100
 
-  // Stamp the user's browser timezone onto their profile on first onboarding load.
+  // On mount: stamp timezone, restore state from onboarding_progress, jump to last unfinished step.
   useEffect(() => {
-    (async () => {
+    let cancelled = false
+    ;(async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { router.push('/login'); return }
+
       const tz = getUserTimezone()
       await supabase.from('user_profile').update({ timezone: tz }).eq('id', user.id)
+
+      const { data: prog } = await supabase
+        .from('onboarding_progress')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (cancelled) return
+      if (prog) {
+        if (prog.identity_data) {
+          const d = prog.identity_data as Record<string, unknown>
+          if (d.display_name) setDisplayName(String(d.display_name))
+          if (d.age != null) setAge(String(d.age))
+          if (d.height_cm != null) setHeightCm(String(d.height_cm))
+          if (d.weight_kg != null) setWeightKg(String(d.weight_kg))
+          if (d.height_unit_pref === 'imperial' || d.height_unit_pref === 'metric') {
+            setHeightUnit(d.height_unit_pref as HeightUnit)
+          }
+          if (d.weight_unit_pref === 'lb' || d.weight_unit_pref === 'kg') {
+            setWeightUnit(d.weight_unit_pref as WeightUnit)
+          }
+        }
+        if (prog.rhythm_data) {
+          const r = prog.rhythm_data as Record<string, unknown>
+          setRhythm({
+            training_days_per_week: r.training_days_per_week ? String(r.training_days_per_week) : '',
+            avg_sleep_hours: r.avg_sleep_hours ? String(r.avg_sleep_hours) : '',
+          })
+        }
+        if (prog.first_goal) setGoal(String(prog.first_goal))
+        if (prog.thirty_day_checkpoint) setCheckpoint(String(prog.thirty_day_checkpoint))
+        if (prog.step_consent_at) {
+          setConsentChecks({ terms: true, privacy: true, notMedical: true })
+        }
+        // Jump to first step that is NOT yet completed.
+        const lastUnfinished = STEPS.findIndex(s => !(prog as Record<string, unknown>)[s.progressField])
+        if (lastUnfinished !== -1) setStep(lastUnfinished)
+        else setStep(STEPS.length - 1)
+      }
+      setResuming(false)
     })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Internal canonical values (cm, kg) for storage.
   const computedHeightCm = useMemo(() => {
     if (heightUnit === 'imperial') {
       const ft = Number(heightFt) || 0
@@ -109,6 +151,11 @@ export default function OnboardingPage() {
     }
   }, [step, allConsent, displayName, goal])
 
+  async function getUserId(): Promise<string | null> {
+    const { data: { user } } = await supabase.auth.getUser()
+    return user?.id ?? null
+  }
+
   function back() {
     haptic()
     if (step > 0) setStep(step - 1)
@@ -119,46 +166,16 @@ export default function OnboardingPage() {
     if (step < STEPS.length - 1) setStep(step + 1)
   }
 
-  async function next() {
-    haptic()
-    if (step === 0) await saveConsent()
-    if (step < STEPS.length - 1) {
-      setStep(step + 1)
-    } else {
-      await finish()
+  async function persistStep(stepIdx: number) {
+    const userId = await getUserId()
+    if (!userId) throw new Error('Not signed in')
+    const update: Record<string, unknown> = {
+      user_id: userId,
+      [STEPS[stepIdx].progressField]: new Date().toISOString(),
     }
-  }
-
-  async function saveConsent() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    try {
-      await supabase.from('consent_log').insert({
-        user_id: user.id,
-        consent_version: DISCLAIMER_VERSION,
-        accepted_terms: consentChecks.terms,
-        accepted_privacy: consentChecks.privacy,
-        accepted_not_medical_advice: consentChecks.notMedical,
-        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-      })
-      await supabase.from('onboarding_progress').upsert({
-        user_id: user.id,
-        step_consent_at: new Date().toISOString(),
-      })
-    } catch (e) {
-      console.error('[onboarding] saveConsent error:', e)
-    }
-  }
-
-  async function finish() {
-    setSubmitting(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/login')
-        return
-      }
-      const identityData = {
+    // Persist step-specific data so resume works.
+    if (stepIdx === 1) {
+      update.identity_data = {
         display_name: displayName,
         age: age ? Number(age) : null,
         height_cm: computedHeightCm,
@@ -166,32 +183,103 @@ export default function OnboardingPage() {
         height_unit_pref: heightUnit,
         weight_unit_pref: weightUnit,
       }
-      await supabase.from('onboarding_progress').upsert({
-        user_id: user.id,
-        step_identity_at: new Date().toISOString(),
-        step_snapshot_at: new Date().toISOString(),
-        step_stack_at: new Date().toISOString(),
-        step_rhythm_at: new Date().toISOString(),
-        step_bloodwork_at: new Date().toISOString(),
-        step_goal_at: new Date().toISOString(),
-        completed_at: new Date().toISOString(),
-        identity_data: identityData,
-        rhythm_data: rhythm,
-        first_goal: goal,
-        thirty_day_checkpoint: checkpoint,
-      })
-      if (displayName) {
-        await supabase.from('user_profile').update({
-          display_name: displayName,
-          onboarding_completed_at: new Date().toISOString(),
-        }).eq('id', user.id)
+    }
+    if (stepIdx === 4) {
+      update.rhythm_data = rhythm
+    }
+    if (stepIdx === 6) {
+      update.first_goal = goal
+      update.thirty_day_checkpoint = checkpoint
+    }
+    const { error: upsertErr } = await supabase
+      .from('onboarding_progress')
+      .upsert(update, { onConflict: 'user_id' })
+    if (upsertErr) throw new Error(upsertErr.message)
+  }
+
+  async function next() {
+    haptic()
+    setError(null)
+    setSubmitting(true)
+    try {
+      if (step === 0) await saveConsent()
+      else if (step !== STEPS.length - 1) await persistStep(step)
+
+      if (step < STEPS.length - 1) {
+        setStep(step + 1)
+      } else {
+        await finish()
       }
     } catch (e) {
-      console.error('[onboarding] finish error:', e)
+      setError(e instanceof Error ? e.message : 'Could not save your progress. Try again.')
+    } finally {
+      setSubmitting(false)
     }
+  }
+
+  async function saveConsent() {
+    const userId = await getUserId()
+    if (!userId) throw new Error('Not signed in')
+    const { error: clErr } = await supabase.from('consent_log').insert({
+      user_id: userId,
+      consent_version: DISCLAIMER_VERSION,
+      accepted_terms: consentChecks.terms,
+      accepted_privacy: consentChecks.privacy,
+      accepted_not_medical_advice: consentChecks.notMedical,
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    })
+    if (clErr) throw new Error('consent_log: ' + clErr.message)
+    const { error: progErr } = await supabase.from('onboarding_progress').upsert({
+      user_id: userId,
+      step_consent_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+    if (progErr) throw new Error('onboarding_progress: ' + progErr.message)
+  }
+
+  async function finish() {
+    const userId = await getUserId()
+    if (!userId) {
+      router.push('/login')
+      return
+    }
+    const identityData = {
+      display_name: displayName,
+      age: age ? Number(age) : null,
+      height_cm: computedHeightCm,
+      weight_kg: computedWeightKg,
+      height_unit_pref: heightUnit,
+      weight_unit_pref: weightUnit,
+    }
+    const nowIso = new Date().toISOString()
+
+    const { error: progErr } = await supabase.from('onboarding_progress').upsert({
+      user_id: userId,
+      step_identity_at: nowIso,
+      step_snapshot_at: nowIso,
+      step_stack_at: nowIso,
+      step_rhythm_at: nowIso,
+      step_bloodwork_at: nowIso,
+      step_goal_at: nowIso,
+      completed_at: nowIso,
+      identity_data: identityData,
+      rhythm_data: rhythm,
+      first_goal: goal,
+      thirty_day_checkpoint: checkpoint,
+    }, { onConflict: 'user_id' })
+    if (progErr) throw new Error('onboarding_progress finish: ' + progErr.message)
+
+    // ALWAYS set onboarding_completed_at — this is what unblocks the home page.
+    const profileUpdate: Record<string, unknown> = { onboarding_completed_at: nowIso }
+    if (displayName) profileUpdate.display_name = displayName
+    const { error: profErr } = await supabase
+      .from('user_profile')
+      .update(profileUpdate)
+      .eq('id', userId)
+    if (profErr) throw new Error('user_profile: ' + profErr.message)
+
     celebrate()
     setDone(true)
-    setTimeout(() => router.push('/'), 2200)
+    setTimeout(() => router.push('/'), 1800)
   }
 
   if (done) {
@@ -215,8 +303,16 @@ export default function OnboardingPage() {
           initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }} className="text-white/60 mt-3 text-sm max-w-xs"
         >
-          Your dashboard is ready. 14-day Pro trial activated.
+          14-day Pro trial activated. Heading to your dashboard…
         </motion.p>
+      </div>
+    )
+  }
+
+  if (resuming) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin text-amber-400" size={20} />
       </div>
     )
   }
@@ -224,11 +320,16 @@ export default function OnboardingPage() {
   const current = STEPS[step]
   const Icon = current.icon
   const isFinalStep = step === STEPS.length - 1
-  const canSkip = OPTIONAL_STEPS.has(step)
+  const isConsentStep = step === 0
+  const canSkip = OPTIONAL_STEPS.has(step) && !isConsentStep
+
+  let primaryLabel = 'Next'
+  if (isConsentStep) primaryLabel = submitting ? 'Saving…' : 'Accept & Continue'
+  else if (isFinalStep) primaryLabel = submitting ? 'Finishing…' : 'Finish & Enter Vitals'
+  else if (submitting) primaryLabel = 'Saving…'
 
   return (
     <div className="px-4 pt-6 pb-28 space-y-5">
-      {/* Header with progress + dot breadcrumbs */}
       <div className="space-y-3">
         <div className="flex items-center justify-between text-xs">
           <span className="text-white/40 uppercase tracking-wider">
@@ -258,7 +359,7 @@ export default function OnboardingPage() {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
-          transition={{ duration: 0.2 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
         >
           <div className="flex items-center gap-2 mb-4">
             <div className="w-10 h-10 rounded-xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center">
@@ -280,17 +381,22 @@ export default function OnboardingPage() {
                     <label key={k} className="flex items-start gap-2 cursor-pointer text-xs">
                       <input
                         type="checkbox"
-                        className="mt-0.5 accent-amber-400"
+                        className="mt-0.5 accent-amber-400 w-4 h-4"
                         checked={consentChecks[k as keyof typeof consentChecks]}
                         onChange={(e) => { haptic(); setConsentChecks(p => ({ ...p, [k]: e.target.checked })) }}
                       />
-                      <span className="text-white/80">
+                      <span className="text-white/80 leading-relaxed">
                         {label}
                         {link && <Link href={link} target="_blank" className="text-cyan-400 ml-1 underline">view</Link>}
                       </span>
                     </label>
                   ))}
                 </div>
+                {!allConsent && (
+                  <p className="text-[10px] text-white/40 flex items-center gap-1">
+                    <ShieldCheck size={11} /> Check all three boxes to continue
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}
@@ -316,7 +422,6 @@ export default function OnboardingPage() {
                   />
                 </div>
 
-                {/* Height with unit toggle */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-white/50 uppercase tracking-wider">Height</label>
@@ -361,12 +466,8 @@ export default function OnboardingPage() {
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">cm</span>
                     </div>
                   )}
-                  {computedHeightCm !== null && (
-                    <p className="text-[10px] text-white/30 mt-1">stored as {computedHeightCm} cm</p>
-                  )}
                 </div>
 
-                {/* Weight with unit toggle */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-white/50 uppercase tracking-wider">Weight</label>
@@ -399,9 +500,6 @@ export default function OnboardingPage() {
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">kg</span>
                     </div>
-                  )}
-                  {computedWeightKg !== null && (
-                    <p className="text-[10px] text-white/30 mt-1">stored as {computedWeightKg} kg</p>
                   )}
                 </div>
               </CardContent>
@@ -522,33 +620,38 @@ export default function OnboardingPage() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Footer nav — Back · (Skip) · Next */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur border-t border-white/10 px-4 py-3">
+      {error && (
+        <Card className="border-rose-400/30 bg-rose-500/10">
+          <CardContent className="py-3 px-3 flex items-start gap-2">
+            <AlertTriangle size={14} className="text-rose-300 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-rose-200 leading-snug">{error}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur border-t border-white/10 px-4 py-3 safe-bottom">
         <div className="max-w-md mx-auto flex items-center gap-2">
           <Button
             variant="outline"
             onClick={back}
-            disabled={step === 0}
+            disabled={step === 0 || submitting}
             className="border-white/20 text-white/60 disabled:opacity-20"
           >
             <ChevronLeft size={16} className="mr-1" /> Back
           </Button>
-
           {canSkip && (
-            <Button variant="ghost" onClick={skip} className="text-white/40">
+            <Button variant="ghost" onClick={skip} disabled={submitting} className="text-white/40">
               Skip
             </Button>
           )}
-
           <Button
             onClick={next}
             disabled={!stepValid || submitting}
-            className="ml-auto bg-amber-400 text-black hover:bg-amber-300 disabled:opacity-30"
+            className="ml-auto bg-amber-400 text-black hover:bg-amber-300 disabled:opacity-30 font-semibold"
           >
-            {isFinalStep
-              ? (submitting ? 'Finishing…' : 'Finish & Enter Vitals')
-              : 'Next'}
-            <ChevronRight size={16} className="ml-1" />
+            {submitting && <Loader2 size={14} className="mr-1.5 animate-spin" />}
+            {primaryLabel}
+            {!submitting && <ChevronRight size={16} className="ml-1" />}
           </Button>
         </div>
       </div>

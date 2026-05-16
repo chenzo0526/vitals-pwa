@@ -33,7 +33,8 @@ function LoginInner() {
     setError(null)
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : ''
-      const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent(redirectTo)}&tz=${encodeURIComponent(tz)}`
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: { emailRedirectTo: callbackUrl },
