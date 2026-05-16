@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: session.url })
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 500 })
+    console.error('[stripe/checkout] error:', err)
+    return NextResponse.json({ error: 'Failed to start checkout. Please try again.' }, { status: 500 })
   }
 }

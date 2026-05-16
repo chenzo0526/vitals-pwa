@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseWorkoutWithClaude } from '@/lib/claude'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const { text } = await req.json()
@@ -8,11 +11,14 @@ export async function POST(req: NextRequest) {
 
     const raw = await parseWorkoutWithClaude(text)
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return NextResponse.json({ error: 'Failed to parse response' }, { status: 500 })
+    if (!jsonMatch) {
+      console.error('[parse-workout] no JSON in response:', raw?.slice(0, 200))
+      return NextResponse.json({ error: 'Failed to parse workout. Please try again.' }, { status: 500 })
+    }
 
     return NextResponse.json(JSON.parse(jsonMatch[0]))
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[parse-workout] error:', err)
+    return NextResponse.json({ error: 'Failed to parse workout. Please try again.' }, { status: 500 })
   }
 }

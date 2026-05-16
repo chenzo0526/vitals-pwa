@@ -1,21 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeImageWithClaude, FOOD_ANALYSIS_PROMPT } from '@/lib/claude'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const { image, mediaType } = await req.json()
     if (!image) return NextResponse.json({ error: 'No image provided' }, { status: 400 })
 
     const raw = await analyzeImageWithClaude(image, mediaType || 'image/jpeg', FOOD_ANALYSIS_PROMPT)
-
-    // Extract JSON from response
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 })
+    if (!jsonMatch) {
+      console.error('[analyze-food] no JSON in response:', raw?.slice(0, 200))
+      return NextResponse.json({ error: 'Failed to analyze food image. Please try again.' }, { status: 500 })
+    }
 
-    const parsed = JSON.parse(jsonMatch[0])
-    return NextResponse.json(parsed)
+    return NextResponse.json(JSON.parse(jsonMatch[0]))
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[analyze-food] error:', err)
+    return NextResponse.json({ error: 'Failed to analyze food image. Please try again.' }, { status: 500 })
   }
 }

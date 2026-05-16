@@ -60,10 +60,9 @@ export async function POST(req: NextRequest) {
 
     // Pull last 7 days of data
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const [intakes, workouts, sets, practices, substances, bloodwork, bwMarkers, customLogs] = await Promise.all([
+    const [intakes, workouts, practices, substances, bloodwork, bwMarkers, customLogs] = await Promise.all([
       supabase.from('intake_events').select('*').gte('ts', since).limit(200),
       supabase.from('workout_sessions').select('*').gte('started_at', since),
-      supabase.from('workout_sets').select('*').gte('id', ''),  // we'll filter in mem
       supabase.from('practice_sessions').select('*').gte('ts', since),
       supabase.from('substances').select('*').eq('active', true),
       supabase.from('bloodwork_panels').select('*').order('ts', { ascending: false }).limit(2),
@@ -99,7 +98,8 @@ User tier: ${tier}. Today: ${new Date().toISOString().split('T')[0]}.`
     const raw = await generateRecommendationWithClaude(TASK_PROMPT, context, model)
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
-      return NextResponse.json({ error: 'Failed to parse AI response', raw }, { status: 500 })
+      console.error('[rediagnosis] no JSON in response:', raw?.slice(0, 300))
+      return NextResponse.json({ error: 'Failed to generate review. Please try again.' }, { status: 500 })
     }
     const parsed = JSON.parse(jsonMatch[0])
 
@@ -137,7 +137,7 @@ User tier: ${tier}. Today: ${new Date().toISOString().split('T')[0]}.`
 
     return NextResponse.json({ report_id: report?.id, ...parsed, model_used: model, tier_at_time: tier })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[rediagnosis] error:', err)
+    return NextResponse.json({ error: 'Failed to generate review. Please try again.' }, { status: 500 })
   }
 }

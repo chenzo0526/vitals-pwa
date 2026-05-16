@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ url: portal.url })
   } catch (err) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Unknown error' }, { status: 500 })
+    console.error('[stripe/portal] error:', err)
+    return NextResponse.json({ error: 'Failed to open billing portal. Please try again.' }, { status: 500 })
   }
 }
