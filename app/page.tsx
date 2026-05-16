@@ -27,10 +27,16 @@ export default function HomePage() {
     async function fetchAll() {
       try {
         const dateStr = new Date().toISOString().split('T')[0]
+        const { data: { user } } = await supabase.auth.getUser()
+        const uid = user?.id
         const [summaryRes, profileRes, onbRes] = await Promise.all([
-          supabase.from('daily_summary').select('*').eq('date', dateStr).single(),
-          supabase.from('user_profile').select('*').single(),
-          supabase.from('onboarding_progress').select('completed_at').single(),
+          supabase.from('daily_summary').select('*').eq('date', dateStr).maybeSingle(),
+          uid
+            ? supabase.from('user_profile').select('*').eq('id', uid).maybeSingle()
+            : Promise.resolve({ data: null }),
+          uid
+            ? supabase.from('onboarding_progress').select('completed_at').eq('user_id', uid).maybeSingle()
+            : Promise.resolve({ data: null }),
         ])
         if (summaryRes.data) {
           setToday({

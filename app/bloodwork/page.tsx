@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { supabase, BloodworkPanel, BloodworkMarker, Substance } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
+import { supabase, BloodworkPanel, BloodworkMarker, Substance, getCurrentUserId } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +27,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 export default function BloodworkPage() {
+  const router = useRouter()
   const [panels, setPanels] = useState<BloodworkPanel[]>([])
   const [markersByCategory, setMarkersByCategory] = useState<Record<string, MarkerWithDate[]>>({})
   const [activeSubstances, setActiveSubstances] = useState<Substance[]>([])
@@ -38,11 +40,14 @@ export default function BloodworkPage() {
 
   async function load() {
     try {
+      const { data: { user } } = await supabase.auth.getUser()
       const [panelsRes, markersRes, subsRes, profRes] = await Promise.all([
         supabase.from('bloodwork_panels').select('*').order('ts', { ascending: false }),
         supabase.from('bloodwork_markers').select('*, bloodwork_panels(ts)').order('panel_id'),
         supabase.from('substances').select('*').eq('active', true),
-        supabase.from('user_profile').select('tier').single(),
+        user
+          ? supabase.from('user_profile').select('tier').eq('id', user.id).maybeSingle()
+          : Promise.resolve({ data: null }),
       ])
       if (panelsRes.data) setPanels(panelsRes.data as BloodworkPanel[])
       if (subsRes.data) setActiveSubstances(subsRes.data as Substance[])
@@ -69,6 +74,11 @@ export default function BloodworkPage() {
     setUploading(true)
     setError(null)
     try {
+      const userId = await getCurrentUserId()
+      if (!userId) {
+        router.push('/login?redirect=/bloodwork')
+        return
+      }
       const base64 = await fileToBase64(file)
       const mediaType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
       const res = await fetch('/api/parse-bloodwork', {
@@ -84,12 +94,16 @@ export default function BloodworkPage() {
         panel_name: data.panel_name || 'Imported panel',
         lab_provider: data.lab_provider || null,
         drawn_on: data.drawn_on || null,
+        user_id: userId,
       }).select().single()
+
+      if (panelRes.error) throw new Error(panelRes.error.message)
 
       if (panelRes.data && data.markers?.length) {
         const panel_id = panelRes.data.id
         const rows = data.markers.map((m: BloodworkMarker) => ({
           panel_id,
+          user_id: userId,
           marker: m.marker,
           category: m.category,
           value: m.value,
@@ -99,7 +113,8 @@ export default function BloodworkPage() {
           flag: m.flag,
           raw_text: m.raw_text,
         }))
-        await supabase.from('bloodwork_markers').insert(rows)
+        const { error: mErr } = await supabase.from('bloodwork_markers').insert(rows)
+        if (mErr) throw new Error(mErr.message)
       }
       load()
     } catch (e) {

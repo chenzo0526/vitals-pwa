@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase, CustomMetricDef } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
+import { supabase, CustomMetricDef, getCurrentUserId } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,10 +11,12 @@ import { Sliders, Plus, X, Check } from 'lucide-react'
 type LogRow = { id: string; metric_id: string; ts: string; value: number | null; value_bool: boolean | null }
 
 export default function CustomMetricsPage() {
+  const router = useRouter()
   const [defs, setDefs] = useState<CustomMetricDef[]>([])
   const [recentLogs, setRecentLogs] = useState<LogRow[]>([])
   const [adding, setAdding] = useState(false)
   const [logging, setLogging] = useState<CustomMetricDef | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
@@ -27,17 +30,38 @@ export default function CustomMetricsPage() {
   }
 
   async function createDef(d: CustomMetricDef) {
-    await supabase.from('custom_metrics_defs').insert(d)
+    setError(null)
+    const userId = await getCurrentUserId()
+    if (!userId) {
+      router.push('/login?redirect=/custom-metrics')
+      return
+    }
+    const { error: insErr } = await supabase.from('custom_metrics_defs').insert({ ...d, user_id: userId })
+    if (insErr) {
+      setError(insErr.message)
+      return
+    }
     setAdding(false)
     load()
   }
 
   async function quickLog(d: CustomMetricDef, value: number | null, valueBool: boolean | null) {
-    await supabase.from('custom_metrics_log').insert({
+    setError(null)
+    const userId = await getCurrentUserId()
+    if (!userId) {
+      router.push('/login?redirect=/custom-metrics')
+      return
+    }
+    const { error: insErr } = await supabase.from('custom_metrics_log').insert({
       metric_id: d.id,
       value,
       value_bool: valueBool,
+      user_id: userId,
     })
+    if (insErr) {
+      setError(insErr.message)
+      return
+    }
     setLogging(null)
     load()
   }
@@ -62,6 +86,12 @@ export default function CustomMetricsPage() {
           <Plus size={16} /> New
         </Button>
       </div>
+
+      {error && (
+        <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded-md p-2">
+          {error}
+        </div>
+      )}
 
       {defs.length === 0 ? (
         <Card className="border-white/10 bg-white/5">

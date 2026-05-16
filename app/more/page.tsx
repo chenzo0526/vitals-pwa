@@ -2,16 +2,15 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import {
   Droplet, Brain, Sliders, CreditCard, Camera, Mic, ScanLine, Dumbbell,
-  TrendingUp, History, FileText, Shield, Sparkles, ChevronRight,
+  TrendingUp, History, FileText, Shield, Sparkles, ChevronRight, LogOut, Loader2,
 } from 'lucide-react'
-import { isTrialing, trialDaysLeft } from '@/lib/tier'
-
-type Profile = { tier: 'free' | 'pro' | 'premium'; display_name: string | null; trial_ends_at: string | null }
+import { isTrialing, trialDaysLeft, UserProfile } from '@/lib/tier'
+import { Button } from '@/components/ui/button'
 
 const SECTIONS = [
   {
@@ -54,15 +53,33 @@ const ACCENT: Record<string, string> = {
 }
 
 export default function MorePage() {
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const router = useRouter()
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [email, setEmail] = useState<string | null>(null)
+  const [signingOut, setSigningOut] = useState(false)
 
   useEffect(() => {
-    supabase.from('user_profile').select('tier, display_name, trial_ends_at').single()
-      .then(({ data }) => data && setProfile(data as Profile))
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setEmail(user.email ?? null)
+      const { data } = await supabase
+        .from('user_profile')
+        .select('*')
+        .eq('id', user?.id || '')
+        .maybeSingle()
+      if (data) setProfile(data as UserProfile)
+    }
+    load()
   }, [])
 
-  const trial = isTrialing(profile as any)
-  const days = trialDaysLeft(profile as any)
+  async function signOut() {
+    setSigningOut(true)
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  const trial = isTrialing(profile)
+  const days = trialDaysLeft(profile)
 
   return (
     <div className="px-4 pt-6 pb-12 space-y-5">
@@ -70,7 +87,7 @@ export default function MorePage() {
       <Card className="border-amber-400/20 bg-gradient-to-br from-amber-400/5 via-violet-400/5 to-cyan-400/5">
         <CardContent className="p-4 flex items-center justify-between">
           <div>
-            <p className="text-sm text-white/60">{profile?.display_name || 'Welcome'}</p>
+            <p className="text-sm text-white/60">{profile?.display_name || email || 'Welcome'}</p>
             <p className="text-2xl font-bold capitalize">{profile?.tier || 'free'} <span className="text-xs text-white/40">tier</span></p>
             {trial && <p className="text-[11px] text-amber-300 mt-0.5">{days}d trial left</p>}
           </div>
@@ -87,11 +104,7 @@ export default function MorePage() {
           <p className="text-xs uppercase tracking-wider text-white/40 mb-2">{section.title}</p>
           <div className="space-y-1.5">
             {section.items.map(item => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="block"
-              >
+              <Link key={item.href} href={item.href} className="block">
                 <Card className="border-white/10 bg-white/5 hover:bg-white/10 transition-colors">
                   <CardContent className="p-3 flex items-center gap-3">
                     <div className={`w-9 h-9 rounded-lg border flex items-center justify-center ${ACCENT[item.accent]}`}>
@@ -109,6 +122,27 @@ export default function MorePage() {
           </div>
         </div>
       ))}
+
+      {/* Sign out */}
+      <div className="pt-4 border-t border-white/10 space-y-2">
+        {email && (
+          <p className="text-[11px] text-white/40 text-center">
+            Signed in as <span className="text-white/70">{email}</span>
+          </p>
+        )}
+        <Button
+          onClick={signOut}
+          disabled={signingOut}
+          variant="outline"
+          className="w-full border-rose-400/30 text-rose-300 hover:bg-rose-500/10"
+        >
+          {signingOut ? (
+            <><Loader2 size={14} className="mr-2 animate-spin" /> Signing out…</>
+          ) : (
+            <><LogOut size={14} className="mr-2" /> Sign out</>
+          )}
+        </Button>
+      </div>
     </div>
   )
 }

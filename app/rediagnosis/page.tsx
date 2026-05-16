@@ -32,8 +32,10 @@ export default function RediagnosisPage() {
   useEffect(() => { load() }, [])
 
   async function load() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     const [profRes, repsRes] = await Promise.all([
-      supabase.from('user_profile').select('tier').single(),
+      supabase.from('user_profile').select('tier').eq('id', user.id).maybeSingle(),
       supabase.from('rediagnosis_reports').select('*').order('ts', { ascending: false }).limit(10),
     ])
     if (profRes.data) setTier((profRes.data as { tier: 'free' | 'pro' | 'premium' }).tier)
@@ -62,8 +64,11 @@ export default function RediagnosisPage() {
   async function logFeedback(idx: number, action: 'accept' | 'skip' | 'already_doing', text: string) {
     if (!report) return
     setFeedback(prev => ({ ...prev, [`${report.id}-${idx}`]: action }))
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     await supabase.from('rediagnosis_feedback').insert({
       report_id: report.id,
+      user_id: user.id,
       recommendation_index: idx,
       recommendation_text: text,
       action,

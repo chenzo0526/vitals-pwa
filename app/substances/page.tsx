@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase, Substance, SUBSTANCE_CATEGORY_COLORS } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
+import { supabase, Substance, SUBSTANCE_CATEGORY_COLORS, getCurrentUserId } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,20 +16,25 @@ const ROUTES = ['oral', 'IM', 'sub-Q', 'topical', 'sublingual', 'inhaled', 'othe
 const SOURCES = ['rx', 'research', 'otc', 'other'] as const
 
 export default function SubstancesPage() {
+  const router = useRouter()
   const [items, setItems] = useState<Substance[]>([])
   const [tier, setTier] = useState<'free' | 'pro' | 'premium'>('pro')
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Substance | null>(null)
   const [adding, setAdding] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
     try {
+      const { data: { user } } = await supabase.auth.getUser()
       const [subRes, profRes] = await Promise.all([
         supabase.from('substances').select('*').order('created_at', { ascending: false }),
-        supabase.from('user_profile').select('tier').single(),
+        user
+          ? supabase.from('user_profile').select('tier').eq('id', user.id).maybeSingle()
+          : Promise.resolve({ data: null }),
       ])
       if (subRes.data) setItems(subRes.data as Substance[])
       if (profRes.data) setTier((profRes.data as { tier: 'free' | 'pro' | 'premium' }).tier)
@@ -37,19 +43,37 @@ export default function SubstancesPage() {
   }
 
   async function saveSubstance(s: Substance) {
-    if (s.id) {
-      await supabase.from('substances').update(s).eq('id', s.id)
-    } else {
-      await supabase.from('substances').insert(s)
+    setError(null)
+    try {
+      const userId = await getCurrentUserId()
+      if (!userId) {
+        router.push('/login?redirect=/substances')
+        return
+      }
+      if (s.id) {
+        const { error: updErr } = await supabase.from('substances').update(s).eq('id', s.id)
+        if (updErr) throw new Error(updErr.message)
+      } else {
+        const { error: insErr } = await supabase.from('substances').insert({ ...s, user_id: userId })
+        if (insErr) throw new Error(insErr.message)
+      }
+      setEditing(null)
+      setAdding(false)
+      load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save')
     }
-    setEditing(null)
-    setAdding(false)
-    load()
   }
 
   async function deleteSubstance(id: string) {
     if (!confirm('Delete this substance?')) return
-    await supabase.from('substances').delete().eq('id', id)
+    setError(null)
+    const { error: delErr } = await supabase.from('substances').delete().eq('id', id)
+    if (delErr) {
+      setError(delErr.message)
+      return
+    }
+    setEditing(null)
     load()
   }
 
@@ -86,6 +110,12 @@ export default function SubstancesPage() {
           title="Hit your 3-substance limit"
           description="Upgrade to Pro for unlimited substances, weekly AI rediagnosis, and bloodwork uploads."
         />
+      )}
+
+      {error && (
+        <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded-md p-2">
+          {error}
+        </div>
       )}
 
       {/* Timeline / Grid by category */}

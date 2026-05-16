@@ -5,7 +5,9 @@ import { ScanLine, Loader2, Check, AlertCircle, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
+import { supabase, getCurrentUserId } from '@/lib/supabase'
+import { Toast, ToastMsg } from '@/components/Toast'
 
 type LabelData = {
   product_name: string
@@ -21,11 +23,14 @@ type LabelData = {
 }
 
 export default function LabelPage() {
+  const router = useRouter()
   const [imageData, setImageData] = useState<string | null>(null)
   const [label, setLabel] = useState<LabelData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [logging, setLogging] = useState(false)
   const [logged, setLogged] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<ToastMsg | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function handleCapture(e: React.ChangeEvent<HTMLInputElement>) {
@@ -61,8 +66,15 @@ export default function LabelPage() {
 
   async function logEntry() {
     if (!label) return
+    setLogging(true)
+    setError(null)
     try {
-      await supabase.from('intake_events').insert({
+      const userId = await getCurrentUserId()
+      if (!userId) {
+        router.push('/login?redirect=/label')
+        return
+      }
+      const { error: insertErr } = await supabase.from('intake_events').insert({
         ts: new Date().toISOString(),
         item: label.product_name,
         qty_text: label.serving_size,
@@ -71,16 +83,24 @@ export default function LabelPage() {
         carbs_g: label.carbs_g,
         fat_g: label.fat_g,
         raw_input: 'label-scan',
-        parsed_by: 'claude-ocr',
+        parsed_by: 'label-ocr',
+        user_id: userId,
       })
+      if (insertErr) throw new Error(insertErr.message)
       setLogged(true)
-    } catch {
-      setLogged(true)
+      setToast({ id: Date.now(), kind: 'success', text: 'Logged to today' })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not save log'
+      setError(msg)
+      setToast({ id: Date.now(), kind: 'error', text: msg })
+    } finally {
+      setLogging(false)
     }
   }
 
   return (
     <div className="px-4 pt-6 space-y-4">
+      <Toast msg={toast} onDismiss={() => setToast(null)} />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Scan Label</h1>
         <Badge variant="outline" className="border-cyan-400/30 text-cyan-400 text-xs">AI OCR</Badge>
@@ -157,8 +177,13 @@ export default function LabelPage() {
                 <Button onClick={() => { setImageData(null); setLabel(null) }} variant="outline" className="flex-1 border-white/20 text-white/60">
                   <RotateCcw size={16} className="mr-2" /> Retake
                 </Button>
-                <Button onClick={logEntry} className="flex-1 bg-cyan-400 text-black font-bold hover:bg-cyan-300">
-                  <Check size={16} className="mr-2" /> Log It
+                <Button
+                  onClick={logEntry}
+                  disabled={logging}
+                  className="flex-1 bg-cyan-400 text-black font-bold hover:bg-cyan-300"
+                >
+                  {logging ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Check size={16} className="mr-2" />}
+                  Log It
                 </Button>
               </>
             ) : (

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { stripe, tierFromPriceId } from '@/lib/stripe'
-import { getServerSupabase } from '@/lib/supabase'
+import { getServiceRoleClient } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -15,13 +15,12 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(body, sig || '', whSecret)
   } catch (err) {
-    return NextResponse.json(
-      { error: `Webhook signature verification failed: ${err instanceof Error ? err.message : 'unknown'}` },
-      { status: 400 }
-    )
+    console.error('[stripe/webhook] signature verification failed:', err)
+    return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
   }
 
-  const sb = getServerSupabase()
+  // Service-role client bypasses RLS so the webhook can write to any user's rows.
+  const sb = getServiceRoleClient()
 
   // Idempotency
   await sb.from('subscription_events').insert({

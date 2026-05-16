@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase, PracticeSession, PRACTICE_CATEGORY_COLORS } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
+import { supabase, PracticeSession, PRACTICE_CATEGORY_COLORS, getCurrentUserId } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -19,9 +20,11 @@ const CATEGORIES = [
 ] as const
 
 export default function PracticesPage() {
+  const router = useRouter()
   const [sessions, setSessions] = useState<PracticeSession[]>([])
   const [logging, setLogging] = useState<PracticeSession | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
@@ -37,10 +40,25 @@ export default function PracticesPage() {
   }
 
   async function save(s: PracticeSession) {
-    if (s.id) await supabase.from('practice_sessions').update(s).eq('id', s.id)
-    else await supabase.from('practice_sessions').insert(s)
-    setLogging(null)
-    load()
+    setError(null)
+    try {
+      const userId = await getCurrentUserId()
+      if (!userId) {
+        router.push('/login?redirect=/practices')
+        return
+      }
+      if (s.id) {
+        const { error: updErr } = await supabase.from('practice_sessions').update(s).eq('id', s.id)
+        if (updErr) throw new Error(updErr.message)
+      } else {
+        const { error: insErr } = await supabase.from('practice_sessions').insert({ ...s, user_id: userId })
+        if (insErr) throw new Error(insErr.message)
+      }
+      setLogging(null)
+      load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save session')
+    }
   }
 
   // Counts last 7 days by category
@@ -77,6 +95,12 @@ export default function PracticesPage() {
           </button>
         ))}
       </div>
+
+      {error && (
+        <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded-md p-2">
+          {error}
+        </div>
+      )}
 
       {/* Recent sessions */}
       <div>

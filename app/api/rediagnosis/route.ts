@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getServerClient } from '@/lib/supabase-server'
 import { generateRecommendationWithClaude } from '@/lib/claude'
 import { TIER_LIMITS } from '@/lib/tier'
 import { DISCLAIMER_VERSION, RECOMMENDATION_DISCLAIMER } from '@/lib/disclaimer'
@@ -38,27 +38,29 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}))
     const forceModel = body.model as string | undefined
 
+    const supabase = getServerClient()
     const { data: { user } } = await supabase.auth.getUser()
-    const userId = user?.id
+    if (!user) {
+      return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+    }
+    const userId = user.id
 
     // Pull tier
     let tier: 'free' | 'pro' | 'premium' = 'pro'
-    if (userId) {
-      const { data: profile } = await supabase.from('user_profile').select('tier').eq('id', userId).single()
-      if (profile) tier = (profile as { tier: 'free' | 'pro' | 'premium' }).tier
-    }
+    const { data: profile } = await supabase.from('user_profile').select('tier').eq('id', userId).maybeSingle()
+    if (profile) tier = (profile as { tier: 'free' | 'pro' | 'premium' }).tier
 
     const limits = TIER_LIMITS[tier]
     if (!limits.rediagnosisAccess) {
       return NextResponse.json(
         { error: 'Rediagnosis requires Pro or Premium. Upgrade in /billing.', tier },
-        { status: 403 }
+        { status: 403 },
       )
     }
 
     const model = forceModel || limits.rediagnosisModel || 'claude-sonnet-4-5'
 
-    // Pull last 7 days of data
+    // Pull last 7 days of data (RLS filters to this user automatically)
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const [intakes, workouts, practices, substances, bloodwork, bwMarkers, customLogs] = await Promise.all([
       supabase.from('intake_events').select('*').gte('ts', since).limit(200),
@@ -73,25 +75,25 @@ export async function POST(req: NextRequest) {
     const context = `USER DATA (last 7 days):
 
 INTAKE EVENTS (${intakes.data?.length || 0}):
-${(intakes.data || []).slice(0, 50).map((i: any) => `- ${i.ts}: ${i.item} (${i.calories || '?'}kcal, ${i.protein_g || '?'}gP)`).join('\n')}
+${(intakes.data || []).slice(0, 50).map((i: { ts: string; item: string; calories?: number; protein_g?: number }) => `- ${i.ts}: ${i.item} (${i.calories || '?'}kcal, ${i.protein_g || '?'}gP)`).join('\n')}
 
 WORKOUTS (${workouts.data?.length || 0}):
-${(workouts.data || []).map((w: any) => `- ${w.started_at} ${w.focus || 'general'} energy ${w.energy_pre}→${w.energy_post}`).join('\n')}
+${(workouts.data || []).map((w: { started_at: string; focus?: string; energy_pre?: number; energy_post?: number }) => `- ${w.started_at} ${w.focus || 'general'} energy ${w.energy_pre}→${w.energy_post}`).join('\n')}
 
 PRACTICES (${practices.data?.length || 0}):
-${(practices.data || []).map((p: any) => `- ${p.ts} ${p.category}/${p.practice_type} ${p.duration_min}min mood ${p.mood_pre}→${p.mood_post}`).join('\n')}
+${(practices.data || []).map((p: { ts: string; category: string; practice_type: string; duration_min?: number; mood_pre?: number; mood_post?: number }) => `- ${p.ts} ${p.category}/${p.practice_type} ${p.duration_min}min mood ${p.mood_pre}→${p.mood_post}`).join('\n')}
 
 ACTIVE STACK (${substances.data?.length || 0}):
-${(substances.data || []).map((s: any) => `- ${s.name} ${s.dose || ''}${s.dose_unit || ''} ${s.frequency || ''} ${s.route || ''} since ${s.start_date}`).join('\n')}
+${(substances.data || []).map((s: { name: string; dose?: number; dose_unit?: string; frequency?: string; route?: string; start_date?: string }) => `- ${s.name} ${s.dose || ''}${s.dose_unit || ''} ${s.frequency || ''} ${s.route || ''} since ${s.start_date}`).join('\n')}
 
 RECENT BLOODWORK PANELS:
-${(bloodwork.data || []).map((b: any) => `- ${b.drawn_on || b.ts}: ${b.panel_name}`).join('\n')}
+${(bloodwork.data || []).map((b: { drawn_on?: string; ts?: string; panel_name?: string }) => `- ${b.drawn_on || b.ts}: ${b.panel_name}`).join('\n')}
 
 RECENT MARKERS:
-${(bwMarkers.data || []).slice(0, 40).map((m: any) => `- ${m.marker}: ${m.value}${m.unit || ''} (ref ${m.ref_low ?? '—'}-${m.ref_high ?? '—'}) flag=${m.flag}`).join('\n')}
+${(bwMarkers.data || []).slice(0, 40).map((m: { marker: string; value?: number; unit?: string; ref_low?: number; ref_high?: number; flag?: string }) => `- ${m.marker}: ${m.value}${m.unit || ''} (ref ${m.ref_low ?? '—'}-${m.ref_high ?? '—'}) flag=${m.flag}`).join('\n')}
 
 CUSTOM METRICS LOGS:
-${(customLogs.data || []).slice(0, 40).map((c: any) => `- ${c.ts} ${c.custom_metrics_defs?.name}: ${c.value ?? c.value_bool}`).join('\n')}
+${(customLogs.data || []).slice(0, 40).map((c: { ts: string; custom_metrics_defs?: { name: string }; value?: number; value_bool?: boolean }) => `- ${c.ts} ${c.custom_metrics_defs?.name}: ${c.value ?? c.value_bool}`).join('\n')}
 
 User tier: ${tier}. Today: ${new Date().toISOString().split('T')[0]}.`
 
@@ -103,8 +105,9 @@ User tier: ${tier}. Today: ${new Date().toISOString().split('T')[0]}.`
     }
     const parsed = JSON.parse(jsonMatch[0])
 
-    // Save report
+    // Save report (RLS check: user_id must equal auth.uid())
     const { data: report } = await supabase.from('rediagnosis_reports').insert({
+      user_id: userId,
       model_used: model,
       tier_at_time: tier,
       period_start: since,
@@ -119,20 +122,15 @@ User tier: ${tier}. Today: ${new Date().toISOString().split('T')[0]}.`
     }).select().single()
 
     // Audit every recommendation
-    const auditRows: Array<{
-      source: string; model_used: string; tier_at_time: string
-      recommendation_text: string; disclaimer_version: string; disclaimer_text: string
-    }> = []
-    for (const a of parsed.adjustments || []) {
-      auditRows.push({
-        source: 'rediagnosis',
-        model_used: model,
-        tier_at_time: tier,
-        recommendation_text: `${a.title}: ${a.detail}`,
-        disclaimer_version: DISCLAIMER_VERSION,
-        disclaimer_text: RECOMMENDATION_DISCLAIMER,
-      })
-    }
+    const auditRows = (parsed.adjustments || []).map((a: { title: string; detail: string }) => ({
+      user_id: userId,
+      source: 'rediagnosis',
+      model_used: model,
+      tier_at_time: tier,
+      recommendation_text: `${a.title}: ${a.detail}`,
+      disclaimer_version: DISCLAIMER_VERSION,
+      disclaimer_text: RECOMMENDATION_DISCLAIMER,
+    }))
     if (auditRows.length) await supabase.from('recommendations_audit').insert(auditRows)
 
     return NextResponse.json({ report_id: report?.id, ...parsed, model_used: model, tier_at_time: tier })

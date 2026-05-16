@@ -19,16 +19,18 @@ export default function WorkoutPage() {
     setError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      const payload: Record<string, unknown> = {
-        focus: focus || null,
-        energy_pre: energyPre,
-        started_at: new Date().toISOString(),
+      if (!user) {
+        router.push('/login?redirect=/workout')
+        return
       }
-      if (user?.id) payload.user_id = user.id
-
       const { data, error: insertErr } = await supabase
         .from('workout_sessions')
-        .insert(payload)
+        .insert({
+          focus: focus || null,
+          energy_pre: energyPre,
+          started_at: new Date().toISOString(),
+          user_id: user.id,
+        })
         .select()
         .single()
 

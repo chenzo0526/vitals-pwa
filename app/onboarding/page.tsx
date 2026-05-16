@@ -119,21 +119,34 @@ export default function OnboardingPage() {
   }
 
   async function saveConsent() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     try {
       await supabase.from('consent_log').insert({
+        user_id: user.id,
         consent_version: DISCLAIMER_VERSION,
         accepted_terms: consentChecks.terms,
         accepted_privacy: consentChecks.privacy,
         accepted_not_medical_advice: consentChecks.notMedical,
         user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
       })
-      await supabase.from('onboarding_progress').upsert({ step_consent_at: new Date().toISOString() })
-    } catch {}
+      await supabase.from('onboarding_progress').upsert({
+        user_id: user.id,
+        step_consent_at: new Date().toISOString(),
+      })
+    } catch (e) {
+      console.error('[onboarding] saveConsent error:', e)
+    }
   }
 
   async function finish() {
     setSubmitting(true)
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/login')
+        return
+      }
       const identityData = {
         display_name: displayName,
         age: age ? Number(age) : null,
@@ -143,6 +156,7 @@ export default function OnboardingPage() {
         weight_unit_pref: weightUnit,
       }
       await supabase.from('onboarding_progress').upsert({
+        user_id: user.id,
         step_identity_at: new Date().toISOString(),
         step_snapshot_at: new Date().toISOString(),
         step_stack_at: new Date().toISOString(),
@@ -156,15 +170,14 @@ export default function OnboardingPage() {
         thirty_day_checkpoint: checkpoint,
       })
       if (displayName) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user?.id) {
-          await supabase.from('user_profile').update({
-            display_name: displayName,
-            onboarding_completed_at: new Date().toISOString(),
-          }).eq('id', user.id)
-        }
+        await supabase.from('user_profile').update({
+          display_name: displayName,
+          onboarding_completed_at: new Date().toISOString(),
+        }).eq('id', user.id)
       }
-    } catch {}
+    } catch (e) {
+      console.error('[onboarding] finish error:', e)
+    }
     celebrate()
     setDone(true)
     setTimeout(() => router.push('/'), 2200)

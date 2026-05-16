@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe, STRIPE_PRICE_IDS } from '@/lib/stripe'
-import { supabase } from '@/lib/supabase'
+import { getServerClient } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,20 +14,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Price not configured. Set STRIPE_PRICE_* env vars.' }, { status: 400 })
     }
 
+    const supabase = getServerClient()
     const { data: { user } } = await supabase.auth.getUser()
-    const userId = user?.id
-    const email = user?.email
+    if (!user) {
+      return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+    }
+    const userId = user.id
+    const email = user.email
 
-    // Ensure customer
+    // Ensure Stripe customer exists.
     let customerId: string | undefined
-    if (userId) {
-      const { data: profile } = await supabase.from('user_profile').select('stripe_customer_id').eq('id', userId).single()
-      customerId = (profile as { stripe_customer_id?: string } | null)?.stripe_customer_id || undefined
-      if (!customerId && email) {
-        const customer = await stripe.customers.create({ email, metadata: { user_id: userId } })
-        customerId = customer.id
-        await supabase.from('user_profile').update({ stripe_customer_id: customerId }).eq('id', userId)
-      }
+    const { data: profile } = await supabase.from('user_profile').select('stripe_customer_id').eq('id', userId).maybeSingle()
+    customerId = (profile as { stripe_customer_id?: string } | null)?.stripe_customer_id || undefined
+    if (!customerId && email) {
+      const customer = await stripe.customers.create({ email, metadata: { user_id: userId } })
+      customerId = customer.id
+      await supabase.from('user_profile').update({ stripe_customer_id: customerId }).eq('id', userId)
     }
 
     const origin = req.headers.get('origin') || 'https://vitals-pwa.vercel.app'
@@ -39,8 +41,8 @@ export async function POST(req: NextRequest) {
       success_url: `${origin}/billing?success=1`,
       cancel_url: `${origin}/billing?canceled=1`,
       allow_promotion_codes: true,
-      metadata: { user_id: userId || '', tier, interval },
-      subscription_data: { metadata: { user_id: userId || '', tier } },
+      metadata: { user_id: userId, tier, interval },
+      subscription_data: { metadata: { user_id: userId, tier } },
     })
 
     return NextResponse.json({ url: session.url })

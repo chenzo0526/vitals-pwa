@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Camera, Lock, Loader2, AlertCircle, TrendingUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserId } from '@/lib/supabase'
 
 type PhysiqueAnalysis = {
   estimated_bf_percent: number
@@ -39,6 +40,7 @@ function MuscleBar({ muscle, score }: { muscle: string; score: number }) {
 }
 
 export default function ProgressPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,31 +59,34 @@ export default function ProgressPage() {
       setLoading(true)
 
       try {
+        const userId = await getCurrentUserId()
+        if (!userId) {
+          router.push('/login?redirect=/progress')
+          return
+        }
         const base64 = dataUrl.split(',')[1]
         const mediaType = dataUrl.startsWith('data:image/png') ? 'image/png' : 'image/jpeg'
 
-        // PRIVACY: Photo goes to API → Claude → discarded. Not stored anywhere.
+        // PRIVACY: Photo is sent to AI for analysis and not persisted.
         const res = await fetch('/api/analyze-physique', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: base64, mediaType }),
         })
         const data = await res.json()
-        if (data.error) throw new Error(data.error)
+        if (!res.ok || data.error) throw new Error(data.error || 'Analysis failed')
         setAnalysis(data)
 
         // Save ONLY the text analysis to Supabase, not the image
-        try {
-          await supabase.from('physique_snapshots').insert({
-            ts: new Date().toISOString(),
-            image_storage_path: null, // not persisted
-            analysis_json: data,
-            bf_percent_estimate: data.estimated_bf_percent,
-          })
-          setSaved(true)
-        } catch {
-          setSaved(true) // optimistic
-        }
+        const { error: insErr } = await supabase.from('physique_snapshots').insert({
+          ts: new Date().toISOString(),
+          image_storage_path: null,
+          analysis_json: data,
+          bf_percent_estimate: data.estimated_bf_percent,
+          user_id: userId,
+        })
+        if (insErr) throw new Error(insErr.message)
+        setSaved(true)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Analysis failed')
       } finally {

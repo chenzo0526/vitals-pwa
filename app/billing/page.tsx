@@ -54,7 +54,9 @@ function BillingInner() {
   useEffect(() => { load() }, [])
 
   async function load() {
-    const { data } = await supabase.from('user_profile').select('*').single()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase.from('user_profile').select('*').eq('id', user.id).maybeSingle()
     if (data) setProfile(data as UserProfile)
   }
 

@@ -170,19 +170,21 @@ function ActiveWorkoutInner() {
     setSavingExercise(true)
     setError(null)
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/login?redirect=/workout')
+        return
+      }
       let setNumStart = nextSetNumber
-      const rows = validRows.map((d) => {
-        const row: Record<string, unknown> = {
-          session_id: sessionId,
-          exercise_name: name,
-          set_number: setNumStart++,
-          weight_lb: d.weight_lb ? Number(d.weight_lb) : null,
-          reps: d.reps ? Number(d.reps) : null,
-          rpe: d.rpe ? Number(d.rpe) : null,
-        }
-        if (session.user_id) row.user_id = session.user_id
-        return row
-      })
+      const rows = validRows.map((d) => ({
+        session_id: sessionId,
+        user_id: user.id,
+        exercise_name: name,
+        set_number: setNumStart++,
+        weight_lb: d.weight_lb ? Number(d.weight_lb) : null,
+        reps: d.reps ? Number(d.reps) : null,
+        rpe: d.rpe ? Number(d.rpe) : null,
+      }))
       const { data, error: insertErr } = await supabase.from('workout_sets').insert(rows).select()
       if (insertErr) throw new Error(insertErr.message)
       if (data) setAllSets((prev) => [...prev, ...(data as SetRow[])])
