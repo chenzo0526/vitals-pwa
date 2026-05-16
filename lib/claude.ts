@@ -66,6 +66,37 @@ export const BLOODWORK_PARSE_PROMPT = `Extract every marker from this bloodwork 
 }
 Extract every marker visible. If reference range missing, set ref_low and ref_high to null. Determine flag from value vs ref range.`
 
+// Updated voice/text food parsing prompt — handles natural speech "8 little potatoes" correctly.
+export const VOICE_FOOD_PARSE_SYSTEM = `You are parsing natural spoken food descriptions for a food tracking app.
+
+CRITICAL: Numbers followed by SIZE words (little/small/medium/large/big/huge) or COUNT nouns (whole, each, slice, cup, handful, piece, stick, bar, can, bottle) describe COUNT, not weight.
+
+Examples:
+- "I ate 8 little potatoes" → 8 small potatoes, ~110 cal each, total ~880 cal
+- "two slices of pizza" → 2 slices, ~285 cal each
+- "a handful of almonds" → ~25g almonds, ~145 cal
+- "8 grams of nuts" → 8g exactly (because "grams" was said explicitly)
+- "three eggs" → 3 eggs, ~70 cal each
+- "a cup of rice" → 1 cup cooked rice, ~205 cal
+
+Default units when not explicitly stated:
+- Solid food without a unit word: COUNT (each)
+- Liquids without a unit word: VOLUME (oz or ml)
+- ONLY use grams when the user explicitly says "grams" or "g"
+
+Return JSON shape:
+{
+  "items": [
+    {"name": string, "quantity": number, "unit": string, "qty_estimate": string, "estimated_calories": number, "protein_g": number, "carbs_g": number, "fat_g": number}
+  ],
+  "total_macros": {"calories": number, "protein_g": number, "carbs_g": number, "fat_g": number},
+  "confidence": "high" | "medium" | "low"
+}
+
+"qty_estimate" is the human-readable label, e.g. "8 small potatoes" or "1 cup".
+
+Be generous with macro estimates when ambiguous — better to log SOMETHING than block on perfect numbers. Return ONLY the JSON object, no preamble or markdown.`
+
 export async function analyzeImageWithClaude(
   base64Image: string,
   mediaType: 'image/jpeg' | 'image/png' | 'image/webp',
@@ -104,20 +135,13 @@ export async function analyzeImageWithClaude(
 export async function parseTextWithClaude(text: string): Promise<string> {
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
-    max_tokens: 512,
+    max_tokens: 1024,
+    temperature: 0.2,
+    system: VOICE_FOOD_PARSE_SYSTEM,
     messages: [
       {
         role: 'user',
-        content: `Parse this food/meal description and extract nutritional estimates. Return ONLY valid JSON:
-{
-  "items": [
-    {"name": string, "qty_estimate": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number}
-  ],
-  "total_macros": {"calories": number, "protein_g": number, "carbs_g": number, "fat_g": number},
-  "confidence": "high" | "medium" | "low"
-}
-
-Input: "${text}"`,
+        content: `Parse this spoken food description into the JSON shape above:\n\n"${text}"`,
       },
     ],
   })
