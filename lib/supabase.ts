@@ -1,16 +1,19 @@
-import { createClient } from '@supabase/supabase-js'
+// Browser-side Supabase client (auth cookie aware via @supabase/ssr).
+// Use this from any 'use client' component or hook.
+import { createBrowserClient } from '@supabase/ssr'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
 
-// Server-side admin client (used in webhook handlers)
-export function getServerSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-  return createClient(url, serviceKey, { auth: { persistSession: false } })
+// Helper: get the current authenticated user id, or null.
+export async function getCurrentUserId(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  return user?.id ?? null
 }
+
+// ── Domain types ─────────────────────────────────────────────────────────────
 
 export type IntakeEvent = {
   id?: string
@@ -26,6 +29,7 @@ export type IntakeEvent = {
   raw_input?: string
   parsed_by?: string
   image_url?: string
+  user_id?: string
 }
 
 export type WorkoutSession = {
@@ -36,16 +40,18 @@ export type WorkoutSession = {
   energy_pre?: number
   energy_post?: number
   notes?: string
+  user_id?: string
 }
 
 export type WorkoutSet = {
   id?: string
   session_id: string
-  exercise: string
-  set_num: number
+  exercise_name: string
+  set_number: number
   reps?: number
   weight_lb?: number
   rpe?: number
+  user_id?: string
 }
 
 export type PhysiqueSnapshot = {
@@ -55,6 +61,7 @@ export type PhysiqueSnapshot = {
   analysis_json?: object
   bf_percent_estimate?: number
   notes?: string
+  user_id?: string
 }
 
 export type DailySummary = {
@@ -85,6 +92,7 @@ export type Substance = {
   source_flag?: 'rx' | 'research' | 'otc' | 'other'
   notes?: string
   active?: boolean
+  user_id?: string
 }
 
 export type BloodworkPanel = {
@@ -95,6 +103,7 @@ export type BloodworkPanel = {
   panel_name?: string
   lab_provider?: string
   notes?: string
+  user_id?: string
 }
 
 export type BloodworkMarker = {
@@ -108,6 +117,7 @@ export type BloodworkMarker = {
   ref_high?: number
   flag?: 'low' | 'normal' | 'high' | 'critical'
   raw_text?: string
+  user_id?: string
 }
 
 export type PracticeSession = {
@@ -124,6 +134,7 @@ export type PracticeSession = {
   clarity_pre?: number
   clarity_post?: number
   notes?: string
+  user_id?: string
 }
 
 export type CustomMetricDef = {
@@ -133,6 +144,7 @@ export type CustomMetricDef = {
   frequency?: 'daily' | 'weekly' | 'per_event'
   metric_type?: 'numeric' | 'boolean' | 'scale_1_10'
   active?: boolean
+  user_id?: string
 }
 
 export const SUBSTANCE_CATEGORY_COLORS: Record<string, string> = {
