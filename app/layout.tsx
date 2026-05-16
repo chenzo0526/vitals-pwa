@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import BottomNav from '@/components/BottomNav'
+import { ToastProvider } from '@/components/Toast'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -39,10 +40,12 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className={`${inter.variable} antialiased`}>
-        <main className="max-w-md mx-auto pb-24 min-h-screen">
-          {children}
-        </main>
-        <BottomNav />
+        <ToastProvider>
+          <main className="max-w-md mx-auto pb-24 min-h-screen">
+            {children}
+          </main>
+          <BottomNav />
+        </ToastProvider>
       </body>
     </html>
   )
