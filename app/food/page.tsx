@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Camera, RotateCcw, Check, Loader2, AlertCircle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Camera, ImagePlus, RotateCcw, Check, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { supabase } from '@/lib/supabase'
+import { supabase, getCurrentUserId } from '@/lib/supabase'
+import { Toast, ToastMsg } from '@/components/Toast'
 
 type MacroItem = {
   name: string
@@ -24,17 +26,18 @@ type Analysis = {
 }
 
 export default function FoodPage() {
+  const router = useRouter()
   const [imageData, setImageData] = useState<string | null>(null)
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [loading, setLoading] = useState(false)
+  const [logging, setLogging] = useState(false)
   const [logged, setLogged] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [toast, setToast] = useState<ToastMsg | null>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const libraryRef = useRef<HTMLInputElement>(null)
 
-  async function handleCapture(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-
+  async function handleImage(file: File) {
     const reader = new FileReader()
     reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string
@@ -45,6 +48,18 @@ export default function FoodPage() {
       await analyzeImage(dataUrl)
     }
     reader.readAsDataURL(file)
+  }
+
+  function onCameraChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) handleImage(file)
+    e.target.value = ''
+  }
+
+  function onLibraryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) handleImage(file)
+    e.target.value = ''
   }
 
   async function analyzeImage(dataUrl: string) {
@@ -58,7 +73,7 @@ export default function FoodPage() {
         body: JSON.stringify({ image: base64, mediaType }),
       })
       const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      if (!res.ok || data.error) throw new Error(data.error || 'Analysis failed')
       setAnalysis(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
@@ -69,9 +84,16 @@ export default function FoodPage() {
 
   async function logEntry() {
     if (!analysis) return
+    setLogging(true)
+    setError(null)
     try {
+      const userId = await getCurrentUserId()
+      if (!userId) {
+        router.push('/login?redirect=/food')
+        return
+      }
       const items = analysis.items.map((item) => item.name).join(', ')
-      await supabase.from('intake_events').insert({
+      const { error: insertErr } = await supabase.from('intake_events').insert({
         ts: new Date().toISOString(),
         item: items,
         qty_text: analysis.items.map((i) => `${i.qty_estimate} ${i.name}`).join(', '),
@@ -80,11 +102,18 @@ export default function FoodPage() {
         carbs_g: analysis.total_macros.carbs_g,
         fat_g: analysis.total_macros.fat_g,
         raw_input: 'camera',
-        parsed_by: 'claude-vision',
+        parsed_by: 'food-vision',
+        user_id: userId,
       })
+      if (insertErr) throw new Error(insertErr.message)
       setLogged(true)
-    } catch {
-      setLogged(true) // UI optimistic — supabase may have placeholder creds
+      setToast({ id: Date.now(), kind: 'success', text: 'Logged to today' })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not save log'
+      setError(msg)
+      setToast({ id: Date.now(), kind: 'error', text: msg })
+    } finally {
+      setLogging(false)
     }
   }
 
@@ -96,34 +125,38 @@ export default function FoodPage() {
 
   return (
     <div className="px-4 pt-6 space-y-4">
+      <Toast msg={toast} onDismiss={() => setToast(null)} />
+
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Snap Plate</h1>
         <Badge variant="outline" className="border-amber-400/30 text-amber-400 text-xs">AI Vision</Badge>
       </div>
 
-      {/* Camera Input */}
-      <button
-        onClick={() => fileRef.current?.click()}
-        className="w-full aspect-video rounded-2xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center gap-3 bg-white/5 active:bg-white/10 transition-colors overflow-hidden relative"
-      >
-        {imageData ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageData} alt="Captured plate" className="absolute inset-0 w-full h-full object-cover rounded-2xl" />
-        ) : (
-          <>
-            <Camera size={40} className="text-white/30" />
-            <p className="text-white/40 text-sm">Tap to capture or upload plate</p>
-          </>
-        )}
-      </button>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleCapture}
-        className="hidden"
-      />
+      {/* Source buttons */}
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          onClick={() => cameraRef.current?.click()}
+          className="bg-amber-400/10 border border-amber-400/30 text-amber-300 hover:bg-amber-400/20 h-12"
+        >
+          <Camera size={18} className="mr-2" /> Take photo
+        </Button>
+        <Button
+          onClick={() => libraryRef.current?.click()}
+          className="bg-cyan-400/10 border border-cyan-400/30 text-cyan-300 hover:bg-cyan-400/20 h-12"
+        >
+          <ImagePlus size={18} className="mr-2" /> Upload from library
+        </Button>
+      </div>
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={onCameraChange} className="hidden" />
+      <input ref={libraryRef} type="file" accept="image/*" onChange={onLibraryChange} className="hidden" />
+
+      {/* Preview */}
+      {imageData && (
+        <div className="w-full aspect-video rounded-2xl overflow-hidden relative bg-white/5 border border-white/10">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageData} alt="Captured plate" className="absolute inset-0 w-full h-full object-cover" />
+        </div>
+      )}
 
       {/* Loading */}
       {loading && (
@@ -136,7 +169,7 @@ export default function FoodPage() {
       )}
 
       {/* Error */}
-      {error && (
+      {error && !loading && (
         <Card className="border-red-400/20 bg-red-400/5">
           <CardContent className="py-4 flex items-center gap-3">
             <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
@@ -190,32 +223,32 @@ export default function FoodPage() {
           </Card>
 
           {/* Actions */}
-          <div className="flex gap-2">
-            {!logged ? (
-              <>
-                <Button
-                  onClick={() => { setImageData(null); setAnalysis(null) }}
-                  variant="outline"
-                  className="flex-1 border-white/20 text-white/60"
-                >
-                  <RotateCcw size={16} className="mr-2" /> Retake
-                </Button>
-                <Button
-                  onClick={logEntry}
-                  className="flex-1 bg-amber-400 text-black font-bold hover:bg-amber-300"
-                >
-                  <Check size={16} className="mr-2" /> Log It
-                </Button>
-              </>
-            ) : (
-              <Card className="w-full border-green-400/20 bg-green-400/5">
-                <CardContent className="py-3 flex items-center justify-center gap-2">
-                  <Check size={16} className="text-green-400" />
-                  <p className="text-green-400 font-medium">Logged ✓</p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          {!logged ? (
+            <div className="flex gap-2">
+              <Button
+                onClick={() => { setImageData(null); setAnalysis(null) }}
+                variant="outline"
+                className="flex-1 border-white/20 text-white/60"
+              >
+                <RotateCcw size={16} className="mr-2" /> Retake
+              </Button>
+              <Button
+                onClick={logEntry}
+                disabled={logging}
+                className="flex-1 bg-amber-400 text-black font-bold hover:bg-amber-300"
+              >
+                {logging ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Check size={16} className="mr-2" />}
+                Log It
+              </Button>
+            </div>
+          ) : (
+            <Card className="w-full border-green-400/20 bg-green-400/5">
+              <CardContent className="py-3 flex items-center justify-center gap-2">
+                <Check size={16} className="text-green-400" />
+                <p className="text-green-400 font-medium">Logged ✓</p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>
