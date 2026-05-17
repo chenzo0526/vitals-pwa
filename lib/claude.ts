@@ -45,14 +45,22 @@ export const PHYSIQUE_ANALYSIS_PROMPT = `Analyze this body progress photo object
   "notes": string
 }`
 
-export const PHYSIQUE_MULTI_ANGLE_PROMPT = `You are analyzing 1-3 body progress photos of the same person from different angles (front, side, back). When multiple angles are provided, TRIANGULATE across them for a single calibrated reading — not three separate estimates. The front photo informs abdominal/chest/shoulder/arm development. The side photo informs posture, lumbar curve, and visceral/anterior fat distribution. The back photo informs lats/traps/glutes/hamstrings.
+export const PHYSIQUE_MULTI_ANGLE_PROMPT = `You are analyzing 1-4 body progress photos of the same person from different angles: FRONT (anterior), LEFT (left side profile, subject facing right), RIGHT (right side profile, subject facing left), BACK (posterior). When multiple angles are provided, TRIANGULATE across them for a single calibrated reading — not multiple separate estimates.
 
-Score each muscle group 1-10 using the best angle that shows it. Estimate body fat % once, weighted across all available angles (multi-angle estimates are more accurate than single-angle). If only one photo is provided, note that the read is less calibrated.
+Angle responsibilities:
+- FRONT: abdominal definition, chest/shoulder/arm development, anterior symmetry, frontal posture
+- LEFT and RIGHT: lateral posture, lumbar curve, anterior vs. visceral fat distribution, shoulder protraction, mirror-check left-vs-right asymmetry
+- BACK: lats, traps, rhomboids, glute development, hamstring detail, posterior chain symmetry
+
+Score each muscle group 1-10 using the best angle that shows it. Estimate body fat % once, weighted across all available angles. Multi-angle estimates are materially more accurate than single-angle. If only one photo is provided, set bf_confidence to "low" and note the limitation in the notes field. With 4 angles + good lighting, you can usually achieve "high" confidence.
+
+When LEFT and RIGHT are both present, explicitly check for left-vs-right asymmetry and surface it in symmetry_issues.
+
 Return ONLY valid JSON:
 {
   "estimated_bf_percent": number,
   "bf_confidence": "high" | "medium" | "low",
-  "angles_analyzed": ("front" | "side" | "back")[],
+  "angles_analyzed": ("front" | "left" | "right" | "back")[],
   "muscle_development": {
     "chest": number, "back": number, "shoulders": number, "arms": number,
     "quads": number, "hams": number, "glutes": number, "calves": number, "abs": number
@@ -152,7 +160,7 @@ export async function analyzeImageWithClaude(
   return ''
 }
 
-export type AngleLabel = 'front' | 'side' | 'back'
+export type AngleLabel = 'front' | 'left' | 'right' | 'back'
 export type LabeledImage = {
   angle: AngleLabel
   base64: string

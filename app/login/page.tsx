@@ -77,9 +77,11 @@ function LoginInner() {
     }
   }, [email, sending])
 
-  const verify = useCallback(async () => {
+  // verify() can be called with an override token (used by auto-submit so we don't
+  // race React state). Without an override, it falls back to current code state.
+  const verify = useCallback(async (overrideToken?: string) => {
     if (verifying) return
-    const token = code.trim()
+    const token = (overrideToken ?? code).trim()
     if (token.length < 4 || !/^\d+$/.test(token)) return
     setVerifying(true)
     setError(null)
@@ -128,11 +130,13 @@ function LoginInner() {
     const clean = value.replace(/\D/g, '').slice(0, 10)
     setCode(clean)
     if (error) setError(null)
-    // Auto-submit when length hits 7 (current Supabase default), once per code entry.
+    // Auto-submit when length hits 7 (Supabase's current OTP length). Trigger fires
+    // for both manual typing (digit-by-digit) and autofill/paste (full string in one event).
+    // CRITICAL: pass `clean` to verify() directly — React state hasn't flushed yet,
+    // so verify() reading `code` would see the stale value (iOS autofill bug).
     if (clean.length === 7 && !autoSubmittedRef.current && !verifying) {
       autoSubmittedRef.current = true
-      // defer so the state update flushes
-      setTimeout(() => verify(), 0)
+      verify(clean)
     }
     if (clean.length < 7) autoSubmittedRef.current = false
   }
@@ -140,7 +144,7 @@ function LoginInner() {
   function onCodeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter' && canVerify) {
       e.preventDefault()
-      verify()
+      verify(code)
     }
   }
 
@@ -254,7 +258,7 @@ function LoginInner() {
                   </div>
 
                   <Button
-                    onClick={verify}
+                    onClick={() => verify(code)}
                     disabled={!canVerify || verifying}
                     className="w-full bg-amber-400 text-black font-bold hover:bg-amber-300 disabled:opacity-40 h-11"
                   >

@@ -11,7 +11,7 @@ import {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const VALID_ANGLES: AngleLabel[] = ['front', 'side', 'back']
+const VALID_ANGLES: AngleLabel[] = ['front', 'left', 'right', 'back']
 
 type IncomingImage = {
   angle?: string

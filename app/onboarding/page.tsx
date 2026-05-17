@@ -501,20 +501,19 @@ export default function OnboardingPage() {
           {step === 2 && (
             <Card className="border-white/10 bg-white/5">
               <CardContent className="pt-5 space-y-3">
-                <p className="text-xs text-white/60">Take a baseline body photo or note your current state.</p>
-                <Link
-                  href="/progress"
-                  className="block text-center py-4 rounded-lg bg-amber-400/10 border border-amber-400/30 text-amber-400 text-sm font-medium hover:bg-amber-400/20 transition-colors"
-                >
-                  <Camera size={20} className="inline mr-2" />
-                  Go to Body Check
-                </Link>
+                <div className="flex items-start gap-2 bg-amber-400/5 border border-amber-400/20 rounded-lg p-2.5">
+                  <Camera size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                    <span className="font-semibold text-amber-300">You&apos;ll capture body photos next</span> — front, sides, and back — right after onboarding. For now, just note where you&apos;re starting from.
+                  </p>
+                </div>
                 <Textarea
                   value={snapshotNotes}
                   onChange={(e) => setSnapshotNotes(e.target.value)}
-                  placeholder="Or describe your current physique state..."
+                  placeholder="Current physique state — weight, recent changes, anything to flag..."
                   className="bg-white/5 border-white/10"
                 />
+                <p className="text-[10px] text-white/40">Optional — hit Skip if you&apos;d rather just go straight to photos.</p>
               </CardContent>
             </Card>
           )}
@@ -522,20 +521,19 @@ export default function OnboardingPage() {
           {step === 3 && (
             <Card className="border-white/10 bg-white/5">
               <CardContent className="pt-5 space-y-3">
-                <p className="text-xs text-white/60">List substances you&apos;re currently taking (you&apos;ll add details later).</p>
-                <Link
-                  href="/substances"
-                  className="block text-center py-4 rounded-lg bg-amber-400/10 border border-amber-400/30 text-amber-400 text-sm font-medium hover:bg-amber-400/20 transition-colors"
-                >
-                  <FlaskConical size={20} className="inline mr-2" />
-                  Open Stack Builder
-                </Link>
+                <div className="flex items-start gap-2 bg-amber-400/5 border border-amber-400/20 rounded-lg p-2.5">
+                  <FlaskConical size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                    <span className="font-semibold text-amber-300">You&apos;ll build your full stack next</span> — doses, frequency, schedule — in Stack Builder after onboarding. For now, just a quick list so we know what to look for.
+                  </p>
+                </div>
                 <Textarea
                   value={stackNotes}
                   onChange={(e) => setStackNotes(e.target.value)}
                   placeholder="Quick list: TRT, BPC-157, creatine, magnesium..."
                   className="bg-white/5 border-white/10"
                 />
+                <p className="text-[10px] text-white/40">Optional — hit Skip if you&apos;re not on anything.</p>
               </CardContent>
             </Card>
           )}
@@ -568,20 +566,19 @@ export default function OnboardingPage() {
           {step === 5 && (
             <Card className="border-white/10 bg-white/5">
               <CardContent className="pt-5 space-y-3">
-                <p className="text-xs text-white/60">Upload recent bloodwork now, or skip and add later.</p>
-                <Link
-                  href="/bloodwork"
-                  className="block text-center py-4 rounded-lg bg-amber-400/10 border border-amber-400/30 text-amber-400 text-sm font-medium hover:bg-amber-400/20 transition-colors"
-                >
-                  <Droplet size={20} className="inline mr-2" />
-                  Upload Bloodwork
-                </Link>
+                <div className="flex items-start gap-2 bg-amber-400/5 border border-amber-400/20 rounded-lg p-2.5">
+                  <Droplet size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                    <span className="font-semibold text-amber-300">You&apos;ll upload bloodwork next</span> — PDFs, photos, or manual entry — after onboarding. Just note your last panel here.
+                  </p>
+                </div>
                 <Textarea
                   value={bloodworkNote}
                   onChange={(e) => setBloodworkNote(e.target.value)}
-                  placeholder="Note: last lab date, panels run, anything flagged..."
+                  placeholder="Last lab date, panels run, anything flagged..."
                   className="bg-white/5 border-white/10"
                 />
+                <p className="text-[10px] text-white/40">Optional — hit Skip if you don&apos;t have recent bloodwork.</p>
               </CardContent>
             </Card>
           )}

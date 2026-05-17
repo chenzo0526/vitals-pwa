@@ -12,7 +12,7 @@ import { compressImage } from '@/lib/images'
 type PhysiqueAnalysis = {
   estimated_bf_percent: number
   bf_confidence?: 'high' | 'medium' | 'low'
-  angles_analyzed?: Array<'front' | 'side' | 'back'>
+  angles_analyzed?: Array<'front' | 'left' | 'right' | 'back'>
   muscle_development: {
     chest: number; back: number; shoulders: number; arms: number
     quads: number; hams: number; glutes: number; calves: number; abs: number
@@ -25,7 +25,7 @@ type PhysiqueAnalysis = {
   notes?: string
 }
 
-type Angle = 'front' | 'side' | 'back'
+type Angle = 'front' | 'left' | 'right' | 'back'
 
 type SlotState = {
   base64: string
@@ -33,11 +33,18 @@ type SlotState = {
   previewUrl: string
 }
 
-const ANGLE_ORDER: Angle[] = ['front', 'side', 'back']
+const ANGLE_ORDER: Angle[] = ['front', 'left', 'right', 'back']
 const ANGLE_LABEL: Record<Angle, string> = {
   front: 'Front',
-  side: 'Side',
+  left: 'Left Side',
+  right: 'Right Side',
   back: 'Back',
+}
+const ANGLE_HINT: Record<Angle, string> = {
+  front: 'Face the camera',
+  left: 'Turn 90° right',
+  right: 'Turn 90° left',
+  back: 'Face away',
 }
 
 const muscleLabels: Record<string, string> = {
@@ -74,7 +81,12 @@ function PhotoSlot({
   const filled = !!state
   return (
     <div className="space-y-1.5">
-      <p className="text-[10px] uppercase tracking-wider text-white/40 text-center">{ANGLE_LABEL[angle]}</p>
+      <div className="flex items-center justify-between px-0.5">
+        <p className="text-[10px] uppercase tracking-wider text-white/50 font-semibold">{ANGLE_LABEL[angle]}</p>
+        {filled && (
+          <span className="text-[9px] text-amber-400 font-semibold">✓ Captured</span>
+        )}
+      </div>
       {filled ? (
         <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-amber-400/40 bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -97,10 +109,10 @@ function PhotoSlot({
         <button
           onClick={onPick}
           disabled={disabled}
-          className="w-full aspect-[3/4] rounded-xl border-2 border-dashed border-white/15 bg-white/5 active:bg-white/10 flex flex-col items-center justify-center gap-1.5 disabled:opacity-40"
+          className="w-full aspect-[3/4] rounded-xl border-2 border-dashed border-white/15 bg-white/5 active:bg-white/10 flex flex-col items-center justify-center gap-1.5 disabled:opacity-40 transition-colors hover:border-amber-400/40 hover:bg-amber-400/5"
         >
-          <Camera size={22} className="text-white/40" />
-          <span className="text-[11px] text-white/50">Add {ANGLE_LABEL[angle].toLowerCase()}</span>
+          <Camera size={20} className="text-white/40" />
+          <span className="text-[10px] text-white/60 px-2 text-center leading-tight">{ANGLE_HINT[angle]}</span>
         </button>
       )}
     </div>
@@ -115,14 +127,16 @@ export default function ProgressPage() {
   const [analysis, setAnalysis] = useState<PhysiqueAnalysis | null>(null)
   const [slots, setSlots] = useState<Record<Angle, SlotState | null>>({
     front: null,
-    side: null,
+    left: null,
+    right: null,
     back: null,
   })
 
   // One hidden input per angle. We trigger it imperatively to capture for the right slot.
   const inputs = {
     front: useRef<HTMLInputElement>(null),
-    side: useRef<HTMLInputElement>(null),
+    left: useRef<HTMLInputElement>(null),
+    right: useRef<HTMLInputElement>(null),
     back: useRef<HTMLInputElement>(null),
   }
   const pendingAngleRef = useRef<Angle>('front')
@@ -225,7 +239,7 @@ export default function ProgressPage() {
       if (slots[a]) URL.revokeObjectURL(slots[a]!.previewUrl)
       if (inputs[a].current) inputs[a].current!.value = ''
     })
-    setSlots({ front: null, side: null, back: null })
+    setSlots({ front: null, left: null, right: null, back: null })
     setAnalysis(null)
     setSaved(false)
     setError(null)
@@ -246,12 +260,14 @@ export default function ProgressPage() {
         <Badge variant="outline" className="border-rose-400/30 text-rose-400 text-xs">AI Vision</Badge>
       </div>
 
-      <p className="text-xs text-white/55 leading-relaxed">
-        Add up to 3 angles for the most accurate read. More angles = better calibration. Tap any slot to capture.
-      </p>
+      <div className="bg-amber-400/5 border border-amber-400/20 rounded-xl px-3 py-2.5">
+        <p className="text-xs text-amber-200/90 leading-relaxed">
+          <span className="font-semibold text-amber-300">For best results: capture all 4 angles.</span> Front, Left Side, Right Side, and Back. More angles = a much more accurate body fat estimate and asymmetry check.
+        </p>
+      </div>
 
-      {/* 3 photo slots */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* 4 photo slots in a 2x2 grid */}
+      <div className="grid grid-cols-2 gap-3">
         {ANGLE_ORDER.map((a) => (
           <PhotoSlot
             key={a}
@@ -262,6 +278,16 @@ export default function ProgressPage() {
             disabled={loading}
           />
         ))}
+      </div>
+
+      <div className="flex items-center justify-center gap-1.5 text-[11px] text-white/40">
+        <span className={slots.front ? 'text-amber-400' : ''}>● Front</span>
+        <span>·</span>
+        <span className={slots.left ? 'text-amber-400' : ''}>● Left</span>
+        <span>·</span>
+        <span className={slots.right ? 'text-amber-400' : ''}>● Right</span>
+        <span>·</span>
+        <span className={slots.back ? 'text-amber-400' : ''}>● Back</span>
       </div>
 
       {/* Hidden inputs — one per angle, each tagged with capture so iOS opens camera */}
