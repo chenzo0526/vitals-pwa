@@ -167,6 +167,38 @@ export type LabeledImage = {
   mediaType: 'image/jpeg' | 'image/png' | 'image/webp'
 }
 
+// PDFs go through Claude as a `document` block (multi-page native parsing).
+// Image-only path won't work for multi-page lab reports.
+export async function analyzePdfWithClaude(
+  base64Pdf: string,
+  prompt: string,
+  model: string = 'claude-sonnet-4-5',
+  maxTokens: number = 4096
+): Promise<string> {
+  type DocumentBlock = {
+    type: 'document'
+    source: { type: 'base64'; media_type: 'application/pdf'; data: string }
+  }
+  type TextBlock = { type: 'text'; text: string }
+  const content: Array<DocumentBlock | TextBlock> = [
+    {
+      type: 'document',
+      source: { type: 'base64', media_type: 'application/pdf', data: base64Pdf },
+    },
+    { type: 'text', text: prompt },
+  ]
+
+  const response = await anthropic.messages.create({
+    model,
+    max_tokens: maxTokens,
+    messages: [{ role: 'user', content }],
+  })
+
+  const out = response.content[0]
+  if (out.type === 'text') return out.text
+  return ''
+}
+
 export async function analyzeMultipleImagesWithClaude(
   images: LabeledImage[],
   prompt: string,

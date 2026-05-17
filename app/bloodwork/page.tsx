@@ -81,7 +81,18 @@ export default function BloodworkPage() {
         return
       }
       const base64 = await fileToBase64(file)
-      const mediaType = file.type === 'image/png' ? 'image/png' : 'image/jpeg'
+      // Detect PDF vs image properly. Previously PDFs were being sent as image/jpeg,
+      // which Claude rejected — silent "Failed to parse" with no real diagnostic.
+      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+      const mediaType = isPdf
+        ? 'application/pdf'
+        : file.type === 'image/png'
+          ? 'image/png'
+          : file.type === 'image/webp'
+            ? 'image/webp'
+            : 'image/jpeg'
+      const sourceFormat = isPdf ? 'pdf' : 'photo'
+
       const res = await fetch('/api/parse-bloodwork', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,7 +102,7 @@ export default function BloodworkPage() {
       if (!res.ok) throw new Error(data.error || 'Parse failed')
 
       const panelRes = await supabase.from('bloodwork_panels').insert({
-        source_format: 'photo',
+        source_format: sourceFormat,
         panel_name: data.panel_name || 'Imported panel',
         lab_provider: data.lab_provider || null,
         drawn_on: data.drawn_on || null,
