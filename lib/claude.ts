@@ -174,24 +174,26 @@ export async function analyzeMultipleImagesWithClaude(
 ): Promise<string> {
   if (images.length === 0) throw new Error('No images provided')
 
-  type ContentBlock =
-    | { type: 'text'; text: string }
-    | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp'; data: string } }
+  type TextBlock = { type: 'text'; text: string }
+  type ImageBlock = {
+    type: 'image'
+    source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp'; data: string }
+  }
+  type ContentBlock = TextBlock | ImageBlock
 
   const content: ContentBlock[] = []
   for (const img of images) {
-    content.push({ type: 'text', text: `Angle: ${img.angle.toUpperCase()}` })
+    content.push({ type: 'text', text: `Angle: ${img.angle.toUpperCase()}` } as TextBlock)
     content.push({
       type: 'image',
       source: { type: 'base64', media_type: img.mediaType, data: img.base64 },
-    })
+    } as ImageBlock)
   }
-  content.push({ type: 'text', text: prompt })
+  content.push({ type: 'text', text: prompt } as TextBlock)
 
   const response = await anthropic.messages.create({
     model,
     max_tokens: 2048,
-    // @ts-expect-error — SDK content typing is conservative; multi-image is supported.
     messages: [{ role: 'user', content }],
   })
 

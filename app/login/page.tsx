@@ -119,9 +119,19 @@ function LoginInner() {
       // Hard-refresh after navigation so middleware re-reads the session cookie.
       router.refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Invalid or expired code.')
+      const raw = e instanceof Error ? e.message : 'Invalid or expired code.'
+      const friendly = /expired|invalid/i.test(raw)
+        ? 'That code didn\'t work. iOS may have autofilled an old code — tap Resend, then paste the newest one from your email.'
+        : raw
+      setError(friendly)
+      // Clear the input so iOS doesn't keep re-pasting the same stale code on the next keystroke.
+      setCode('')
       autoSubmittedRef.current = false
+      // Allow immediate resend on failure — no point making them wait 60s when the code is dead.
+      setResendIn(0)
       setVerifying(false)
+      // Refocus the input so the next paste/typing lands here.
+      setTimeout(() => codeInputRef.current?.focus(), 0)
     }
   }, [code, email, redirectTo, router, verifying])
 
