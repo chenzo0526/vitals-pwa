@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
@@ -27,7 +27,7 @@ function LoginInner() {
 
   const [stage, setStage] = useState<'email' | 'code'>('email')
   const [email, setEmail] = useState('')
-  const [code, setCode] = useState(['', '', '', '', '', ''])
+  const [code, setCode] = useState('')
   const [sending, setSending] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState<string | null>(
@@ -35,8 +35,9 @@ function LoginInner() {
   )
   const [resendIn, setResendIn] = useState(0)
 
-  // Auto-advance focus refs for the 6 digit inputs.
-  const inputs = useRef<Array<HTMLInputElement | null>>([])
+  // Single OTP input ref (Supabase currently sends 7-digit codes, but we accept 4-10).
+  const codeInputRef = useRef<HTMLInputElement | null>(null)
+  const autoSubmittedRef = useRef(false)
 
   // Resend countdown
   useEffect(() => {
@@ -45,13 +46,15 @@ function LoginInner() {
     return () => clearInterval(t)
   }, [resendIn])
 
-  // Auto-focus the first digit input when entering code stage.
+  // Auto-focus the OTP input when entering code stage.
   useEffect(() => {
-    if (stage === 'code') inputs.current[0]?.focus()
+    if (stage === 'code') {
+      autoSubmittedRef.current = false
+      codeInputRef.current?.focus()
+    }
   }, [stage])
 
-  const codeStr = useMemo(() => code.join(''), [code])
-  const canVerify = codeStr.length === 6 && /^\d{6}$/.test(codeStr)
+  const canVerify = code.length >= 4 && /^\d+$/.test(code)
 
   const sendCode = useCallback(async () => {
     if (!email.trim() || sending) return
@@ -64,7 +67,8 @@ function LoginInner() {
       })
       if (otpError) throw otpError
       setStage('code')
-      setCode(['', '', '', '', '', ''])
+      setCode('')
+      autoSubmittedRef.current = false
       setResendIn(RESEND_COOLDOWN_SECONDS)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send code. Try again.')
@@ -73,14 +77,16 @@ function LoginInner() {
     }
   }, [email, sending])
 
-  async function verify() {
-    if (!canVerify || verifying) return
+  const verify = useCallback(async () => {
+    if (verifying) return
+    const token = code.trim()
+    if (token.length < 4 || !/^\d+$/.test(token)) return
     setVerifying(true)
     setError(null)
     try {
       const { data, error: verifyErr } = await supabase.auth.verifyOtp({
         email: email.trim(),
-        token: codeStr,
+        token,
         type: 'email',
       })
       if (verifyErr || !data?.session?.user) throw verifyErr || new Error('Invalid code')
@@ -112,47 +118,36 @@ function LoginInner() {
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Invalid or expired code.')
+      autoSubmittedRef.current = false
       setVerifying(false)
     }
+  }, [code, email, redirectTo, router, verifying])
+
+  function onCodeChange(value: string) {
+    // Strip non-digits, cap at 10 chars.
+    const clean = value.replace(/\D/g, '').slice(0, 10)
+    setCode(clean)
+    if (error) setError(null)
+    // Auto-submit when length hits 7 (current Supabase default), once per code entry.
+    if (clean.length === 7 && !autoSubmittedRef.current && !verifying) {
+      autoSubmittedRef.current = true
+      // defer so the state update flushes
+      setTimeout(() => verify(), 0)
+    }
+    if (clean.length < 7) autoSubmittedRef.current = false
   }
 
-  function setDigit(idx: number, value: string) {
-    // Allow user to clear, or type a single digit
-    const clean = value.replace(/\D/g, '').slice(-1)
-    setCode((prev) => prev.map((c, i) => (i === idx ? clean : c)))
-    if (clean && idx < 5) inputs.current[idx + 1]?.focus()
-  }
-
-  function onKeyDown(idx: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Backspace' && !code[idx] && idx > 0) {
-      inputs.current[idx - 1]?.focus()
-      setCode((prev) => prev.map((c, i) => (i === idx - 1 ? '' : c)))
+  function onCodeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && canVerify) {
       e.preventDefault()
-    } else if (e.key === 'ArrowLeft' && idx > 0) {
-      inputs.current[idx - 1]?.focus()
-      e.preventDefault()
-    } else if (e.key === 'ArrowRight' && idx < 5) {
-      inputs.current[idx + 1]?.focus()
-      e.preventDefault()
-    } else if (e.key === 'Enter' && canVerify) {
       verify()
     }
   }
 
-  function onPaste(e: React.ClipboardEvent<HTMLInputElement>) {
-    const pasted = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6)
-    if (!pasted) return
-    e.preventDefault()
-    const next = ['', '', '', '', '', '']
-    for (let i = 0; i < pasted.length; i++) next[i] = pasted[i]
-    setCode(next)
-    const focusIdx = Math.min(pasted.length, 5)
-    inputs.current[focusIdx]?.focus()
-  }
-
   function changeEmail() {
     setStage('email')
-    setCode(['', '', '', '', '', ''])
+    setCode('')
+    autoSubmittedRef.current = false
     setError(null)
   }
 
@@ -234,31 +229,28 @@ function LoginInner() {
                     <div className="w-10 h-10 mx-auto rounded-full bg-amber-400/10 border border-amber-400/30 flex items-center justify-center mb-3">
                       <ShieldCheck size={18} className="text-amber-300" />
                     </div>
-                    <p className="text-sm font-semibold text-white">Enter the 6-digit code</p>
+                    <p className="text-sm font-semibold text-white">Enter the code from your email</p>
                     <p className="text-xs text-white/50 mt-1">
                       Sent to <span className="text-amber-300">{email}</span>
                     </p>
                   </div>
 
-                  <div className="flex justify-between gap-1.5">
-                    {code.map((digit, i) => (
-                      <input
-                        key={i}
-                        ref={(el) => { inputs.current[i] = el }}
-                        type="text"
-                        inputMode="numeric"
-                        pattern="\d*"
-                        autoComplete={i === 0 ? 'one-time-code' : 'off'}
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => setDigit(i, e.target.value)}
-                        onKeyDown={(e) => onKeyDown(i, e)}
-                        onPaste={onPaste}
-                        onFocus={(e) => e.currentTarget.select()}
-                        className="w-11 h-12 text-center text-xl font-bold tabular-nums bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-amber-400/50 focus:bg-white/10"
-                        aria-label={`Digit ${i + 1}`}
-                      />
-                    ))}
+                  <div>
+                    <input
+                      ref={codeInputRef}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="\d*"
+                      autoComplete="one-time-code"
+                      maxLength={10}
+                      value={code}
+                      onChange={(e) => onCodeChange(e.target.value)}
+                      onKeyDown={onCodeKeyDown}
+                      onFocus={(e) => e.currentTarget.select()}
+                      placeholder="••••••"
+                      className="w-full h-14 text-center text-3xl font-mono font-bold tabular-nums tracking-[0.4em] bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-amber-400/50 focus:bg-white/10"
+                      aria-label="One-time code"
+                    />
                   </div>
 
                   <Button
