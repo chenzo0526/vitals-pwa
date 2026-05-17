@@ -6,7 +6,8 @@ import { supabase, BloodworkPanel, BloodworkMarker, Substance, getCurrentUserId 
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Droplet, Upload, Camera, Loader2, X, AlertTriangle, TrendingUp } from 'lucide-react'
+import Link from 'next/link'
+import { Droplet, Upload, Camera, Loader2, AlertTriangle, TrendingUp, Sparkles } from 'lucide-react'
 import { TIER_LIMITS } from '@/lib/tier'
 import { InlineUpgradeCard } from '@/components/UpgradeBadge'
 import Disclaimer from '@/components/Disclaimer'
@@ -212,24 +213,29 @@ export default function BloodworkPage() {
         </Card>
       )}
 
-      {/* Panels list */}
+      {/* Panels list — tap to open AI Interpreter */}
       {panels.length > 0 && (
         <div>
-          <p className="text-xs uppercase tracking-wider text-white/40 mb-2">Panels</p>
+          <p className="text-xs uppercase tracking-wider text-white/40 mb-2">Panels — tap for AI interpretation</p>
           <div className="space-y-2">
             {panels.map(p => (
-              <Card key={p.id} className="border-white/10 bg-white/5">
-                <CardContent className="p-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{p.panel_name || 'Untitled panel'}</p>
-                    <p className="text-[11px] text-white/50">
-                      {p.drawn_on || (p.ts ? new Date(p.ts).toLocaleDateString() : '')}
-                      {p.lab_provider && ` · ${p.lab_provider}`}
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="border-white/20 text-[10px]">{p.source_format}</Badge>
-                </CardContent>
-              </Card>
+              <Link key={p.id} href={`/bloodwork/${p.id}`}>
+                <Card className="border-white/10 bg-white/5 cursor-pointer hover:border-amber-400/30 hover:bg-white/10 transition-colors">
+                  <CardContent className="p-3 flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{p.panel_name || 'Untitled panel'}</p>
+                      <p className="text-[11px] text-white/50">
+                        {p.drawn_on || (p.ts ? new Date(p.ts).toLocaleDateString() : '')}
+                        {p.lab_provider && ` · ${p.lab_provider}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Sparkles size={12} className="text-amber-400/60" />
+                      <Badge variant="outline" className="border-white/20 text-[10px]">{p.source_format}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
             ))}
           </div>
         </div>
