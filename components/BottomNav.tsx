@@ -31,7 +31,11 @@ export default function BottomNav() {
   const router = useRouter()
   const [sheetOpen, setSheetOpen] = useState(false)
 
-  if (pathname === '/login' || pathname?.startsWith('/auth/callback')) return null
+  if (
+    pathname === '/login' ||
+    pathname === '/onboarding' ||
+    pathname?.startsWith('/auth/callback')
+  ) return null
 
   function open() {
     haptic()

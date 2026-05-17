@@ -45,6 +45,26 @@ export const PHYSIQUE_ANALYSIS_PROMPT = `Analyze this body progress photo object
   "notes": string
 }`
 
+export const PHYSIQUE_MULTI_ANGLE_PROMPT = `You are analyzing 1-3 body progress photos of the same person from different angles (front, side, back). When multiple angles are provided, TRIANGULATE across them for a single calibrated reading — not three separate estimates. The front photo informs abdominal/chest/shoulder/arm development. The side photo informs posture, lumbar curve, and visceral/anterior fat distribution. The back photo informs lats/traps/glutes/hamstrings.
+
+Score each muscle group 1-10 using the best angle that shows it. Estimate body fat % once, weighted across all available angles (multi-angle estimates are more accurate than single-angle). If only one photo is provided, note that the read is less calibrated.
+Return ONLY valid JSON:
+{
+  "estimated_bf_percent": number,
+  "bf_confidence": "high" | "medium" | "low",
+  "angles_analyzed": ("front" | "side" | "back")[],
+  "muscle_development": {
+    "chest": number, "back": number, "shoulders": number, "arms": number,
+    "quads": number, "hams": number, "glutes": number, "calves": number, "abs": number
+  },
+  "symmetry_issues": string[],
+  "posture_flags": string[],
+  "top_3_weak_points": string[],
+  "suggested_focus_next_30_days": string,
+  "overall_condition": "cutting" | "maintaining" | "bulking" | "recomping",
+  "notes": string
+}`
+
 export const BLOODWORK_PARSE_PROMPT = `Extract every marker from this bloodwork report. Return ONLY valid JSON:
 {
   "panel_name": string,
@@ -129,6 +149,46 @@ export async function analyzeImageWithClaude(
 
   const content = response.content[0]
   if (content.type === 'text') return content.text
+  return ''
+}
+
+export type AngleLabel = 'front' | 'side' | 'back'
+export type LabeledImage = {
+  angle: AngleLabel
+  base64: string
+  mediaType: 'image/jpeg' | 'image/png' | 'image/webp'
+}
+
+export async function analyzeMultipleImagesWithClaude(
+  images: LabeledImage[],
+  prompt: string,
+  model: string = 'claude-sonnet-4-5'
+): Promise<string> {
+  if (images.length === 0) throw new Error('No images provided')
+
+  type ContentBlock =
+    | { type: 'text'; text: string }
+    | { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp'; data: string } }
+
+  const content: ContentBlock[] = []
+  for (const img of images) {
+    content.push({ type: 'text', text: `Angle: ${img.angle.toUpperCase()}` })
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: img.mediaType, data: img.base64 },
+    })
+  }
+  content.push({ type: 'text', text: prompt })
+
+  const response = await anthropic.messages.create({
+    model,
+    max_tokens: 2048,
+    // @ts-expect-error — SDK content typing is conservative; multi-image is supported.
+    messages: [{ role: 'user', content }],
+  })
+
+  const out = response.content[0]
+  if (out.type === 'text') return out.text
   return ''
 }
 

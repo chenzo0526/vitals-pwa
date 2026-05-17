@@ -14,6 +14,7 @@ import { Progress } from '@/components/ui/progress'
 import {
   Check, ChevronRight, ChevronLeft, Sparkles, Heart, Camera,
   FlaskConical, Activity, Droplet, Target, AlertTriangle, Loader2, ShieldCheck,
+  Share, Plus, Smartphone,
 } from 'lucide-react'
 
 const STEPS = [
@@ -279,34 +280,11 @@ export default function OnboardingPage() {
 
     celebrate()
     setDone(true)
-    setTimeout(() => router.push('/'), 1800)
+    // Don't auto-route — let the user choose to install or continue. Standalone PWA = real app feel.
   }
 
   if (done) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
-        <motion.div
-          initial={{ scale: 0 }} animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 12 }}
-        >
-          <div className="w-20 h-20 rounded-full bg-amber-400 flex items-center justify-center mb-6">
-            <Check className="text-black" size={48} />
-          </div>
-        </motion.div>
-        <motion.h1
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }} className="text-3xl font-bold tracking-tight"
-        >
-          Welcome to VITALS.
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }} className="text-white/60 mt-3 text-sm max-w-xs"
-        >
-          14-day Pro trial activated. Heading to your dashboard…
-        </motion.p>
-      </div>
-    )
+    return <FinishedScreen onContinue={() => router.push('/')} />
   }
 
   if (resuming) {
@@ -339,17 +317,31 @@ export default function OnboardingPage() {
         </div>
         <Progress value={pct} className="h-1.5 bg-white/10" />
         <div className="flex items-center gap-1 overflow-x-auto pb-1 -mx-4 px-4">
-          {STEPS.map((s, i) => (
-            <button
-              key={s.key}
-              onClick={() => { haptic(); setStep(i) }}
-              className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded-md flex-shrink-0 transition-colors ${
-                i === step ? 'bg-amber-400 text-black' : i < step ? 'bg-white/10 text-white/80' : 'text-white/30'
-              }`}
-            >
-              {s.title}
-            </button>
-          ))}
+          {STEPS.map((s, i) => {
+            const isCurrent = i === step
+            const isCompleted = i < step
+            const isFuture = i > step
+            return (
+              <button
+                key={s.key}
+                onClick={() => {
+                  // Only allow going back to completed steps. Forward jumps must use Next so data persists.
+                  if (isCompleted) { haptic(); setStep(i) }
+                }}
+                disabled={isFuture}
+                aria-disabled={isFuture}
+                className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded-md flex-shrink-0 transition-colors ${
+                  isCurrent
+                    ? 'bg-amber-400 text-black'
+                    : isCompleted
+                      ? 'bg-white/10 text-white/80 hover:bg-white/15 cursor-pointer'
+                      : 'text-white/20 cursor-not-allowed'
+                }`}
+              >
+                {s.title}
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -679,6 +671,113 @@ function UnitToggle({
           {o.label}
         </button>
       ))}
+    </div>
+  )
+}
+
+function detectPlatform(): 'ios-safari' | 'android' | 'standalone' | 'desktop' | 'other' {
+  if (typeof window === 'undefined') return 'other'
+  // Standalone PWA (already installed)
+  const standalone =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    // iOS sets navigator.standalone when launched from homescreen
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  if (standalone) return 'standalone'
+  const ua = window.navigator.userAgent || ''
+  const isIOS = /iPhone|iPad|iPod/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua)
+  if (isIOS) return 'ios-safari'
+  if (/Android/i.test(ua)) return 'android'
+  if (!/Mobi|Android|iPhone|iPad/i.test(ua)) return 'desktop'
+  return 'other'
+}
+
+function FinishedScreen({ onContinue }: { onContinue: () => void }) {
+  const platform = useMemo(() => detectPlatform(), [])
+  const showInstallHelp = platform === 'ios-safari' || platform === 'android'
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center py-12">
+      <motion.div
+        initial={{ scale: 0 }} animate={{ scale: 1 }}
+        transition={{ type: 'spring', stiffness: 200, damping: 12 }}
+      >
+        <div className="w-20 h-20 rounded-full bg-amber-400 flex items-center justify-center mb-6">
+          <Check className="text-black" size={48} />
+        </div>
+      </motion.div>
+      <motion.h1
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }} className="text-3xl font-bold tracking-tight"
+      >
+        Welcome to VITALS.
+      </motion.h1>
+      <motion.p
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }} className="text-white/60 mt-3 text-sm max-w-xs"
+      >
+        14-day Pro trial activated.
+      </motion.p>
+
+      {showInstallHelp && (
+        <motion.div
+          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+          className="mt-8 w-full max-w-sm bg-white/5 border border-amber-400/30 rounded-2xl p-5 text-left"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Smartphone size={18} className="text-amber-400" />
+            <p className="text-sm font-bold text-white">Install Vitals as an app</p>
+          </div>
+          <p className="text-xs text-white/60 leading-relaxed mb-3">
+            Skip the browser. Opens like a real app, stays signed in, no back-swipe surprises.
+          </p>
+          {platform === 'ios-safari' ? (
+            <ol className="space-y-2.5 text-xs text-white/80">
+              <li className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-[10px] font-bold flex items-center justify-center mt-0.5">1</span>
+                <span>Tap the <Share size={12} className="inline -mt-0.5 mx-0.5 text-cyan-400" /> <span className="text-cyan-400 font-semibold">Share</span> button in Safari&apos;s bottom toolbar</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-[10px] font-bold flex items-center justify-center mt-0.5">2</span>
+                <span>Scroll and tap <span className="text-white font-semibold">Add to Home Screen</span> <Plus size={12} className="inline -mt-0.5" /></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-[10px] font-bold flex items-center justify-center mt-0.5">3</span>
+                <span>Tap <span className="text-white font-semibold">Add</span> — Vitals appears on your home screen</span>
+              </li>
+            </ol>
+          ) : (
+            <ol className="space-y-2.5 text-xs text-white/80">
+              <li className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-[10px] font-bold flex items-center justify-center mt-0.5">1</span>
+                <span>Tap the <span className="text-cyan-400 font-semibold">⋮ menu</span> in Chrome (top-right)</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-[10px] font-bold flex items-center justify-center mt-0.5">2</span>
+                <span>Tap <span className="text-white font-semibold">Add to Home screen</span> or <span className="text-white font-semibold">Install app</span></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-[10px] font-bold flex items-center justify-center mt-0.5">3</span>
+                <span>Confirm — Vitals launches like a real app from now on</span>
+              </li>
+            </ol>
+          )}
+        </motion.div>
+      )}
+
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        transition={{ delay: 1.0 }}
+        className="mt-8 w-full max-w-sm"
+      >
+        <Button
+          onClick={onContinue}
+          className="w-full h-12 bg-amber-400 text-black font-bold hover:bg-amber-300"
+        >
+          {showInstallHelp ? 'Continue to dashboard' : 'Enter Vitals'}
+          <ChevronRight size={16} className="ml-1" />
+        </Button>
+      </motion.div>
     </div>
   )
 }
