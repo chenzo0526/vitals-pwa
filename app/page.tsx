@@ -11,6 +11,7 @@ import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Act
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 import { Skeleton, SkeletonCard } from '@/components/Skeleton'
+import CoachInsightCard from '@/components/CoachInsightCard'
 
 const GOALS = { calories: 2400, protein_g: 180, carbs_g: 250, fat_g: 80, water_ml: 3000 }
 
@@ -329,6 +330,9 @@ export default function HomePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* AI Coach — daily cross-data intelligence. The WOW card. */}
+      {!needsOnboarding && <CoachInsightCard />}
 
       {/* Calorie hero */}
       {loading ? (
