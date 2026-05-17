@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, Substance, SUBSTANCE_CATEGORY_COLORS, getCurrentUserId } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { FlaskConical, Plus, X, Calendar, AlertCircle } from 'lucide-react'
+import { FlaskConical, Plus, X, Calendar, AlertCircle, Loader2 } from 'lucide-react'
 import { TIER_LIMITS } from '@/lib/tier'
 import { InlineUpgradeCard } from '@/components/UpgradeBadge'
 import { EmptyState } from '@/components/EmptyState'
@@ -44,13 +44,15 @@ export default function SubstancesPage() {
     setLoading(false)
   }
 
-  async function saveSubstance(s: Substance) {
+  // Returns true on success, false on failure. SubstanceEditor uses this to manage its own
+  // saving spinner and only close on success. Throwing would unmount the editor mid-save.
+  async function saveSubstance(s: Substance): Promise<boolean> {
     setError(null)
     try {
       const userId = await getCurrentUserId()
       if (!userId) {
         router.push('/login?redirect=/substances')
-        return
+        return false
       }
       if (s.id) {
         const { error: updErr } = await supabase.from('substances').update(s).eq('id', s.id)
@@ -62,8 +64,10 @@ export default function SubstancesPage() {
       setEditing(null)
       setAdding(false)
       load()
+      return true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save')
+      return false
     }
   }
 
@@ -136,7 +140,11 @@ export default function SubstancesPage() {
                     <div>
                       <p className="font-semibold text-sm text-white">{s.name}</p>
                       <p className="text-[11px] text-white/50 mt-0.5">
-                        {s.dose ? `${s.dose}${s.dose_unit || ''}` : ''} {s.frequency || ''} {s.route ? `· ${s.route}` : ''}
+                        {[
+                          s.dose ? `${s.dose}${s.dose_unit || ''}` : null,
+                          s.frequency || null,
+                          s.route || null,
+                        ].filter(Boolean).join(' · ')}
                       </p>
                       {s.source_flag && (
                         <Badge variant="outline" className="mt-1.5 border-white/20 text-[9px] py-0">
@@ -192,11 +200,26 @@ function SubstanceEditor({
   substance, onSave, onDelete, onClose,
 }: {
   substance: Substance
-  onSave: (s: Substance) => void
+  onSave: (s: Substance) => Promise<boolean>
   onDelete?: () => void
   onClose: () => void
 }) {
   const [s, setS] = useState<Substance>(substance)
+  const [saving, setSaving] = useState(false)
+  // Ref guard prevents double-fire even if React state hasn't flushed between rapid taps.
+  const inFlightRef = useRef(false)
+
+  async function handleSave() {
+    if (saving || inFlightRef.current) return
+    inFlightRef.current = true
+    setSaving(true)
+    try {
+      await onSave(s)
+    } finally {
+      inFlightRef.current = false
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
@@ -262,16 +285,20 @@ function SubstanceEditor({
 
           <div className="flex items-center gap-2 pt-2 border-t border-white/10">
             {onDelete && (
-              <Button variant="ghost" onClick={onDelete} className="text-rose-400 hover:bg-rose-500/10">
+              <Button variant="ghost" onClick={onDelete} disabled={saving} className="text-rose-400 hover:bg-rose-500/10">
                 <AlertCircle size={14} /> Delete
               </Button>
             )}
             <Button
-              onClick={() => onSave(s)}
-              disabled={!s.name || !s.category}
-              className="ml-auto bg-cyan-400 text-black hover:bg-cyan-300"
+              onClick={handleSave}
+              disabled={!s.name || !s.category || saving}
+              className="ml-auto bg-cyan-400 text-black hover:bg-cyan-300 disabled:opacity-50"
             >
-              Save
+              {saving ? (
+                <><Loader2 size={14} className="mr-1.5 animate-spin" /> Saving…</>
+              ) : (
+                'Save'
+              )}
             </Button>
           </div>
         </CardContent>
@@ -290,6 +317,8 @@ function Field({ label, value, onChange, type = 'text', placeholder }: {
       <input
         type={type} value={value} placeholder={placeholder}
         onChange={e => onChange(e.target.value)}
+        onBlur={e => onChange(e.target.value)}
+        onAnimationStart={e => { if (e.animationName === 'onAutoFillStart') onChange(e.currentTarget.value) }}
         className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-cyan-400/50"
       />
     </div>

@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Zap, Beef, Wheat, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight } from 'lucide-react'
+import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle } from 'lucide-react'
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 import { Skeleton, SkeletonCard } from '@/components/Skeleton'
@@ -20,6 +20,12 @@ type Today = {
 
 type OpenWorkout = { id: string; focus: string | null; started_at: string }
 
+type BaselineStatus = {
+  hasPhysique: boolean
+  hasSubstances: boolean
+  hasBloodwork: boolean
+}
+
 export default function HomePage() {
   const [today, setToday] = useState<Today>({
     calories_total: 0, protein_g_total: 0, carbs_g_total: 0, fat_g_total: 0, water_ml_total: 0,
@@ -28,6 +34,7 @@ export default function HomePage() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [loading, setLoading] = useState(true)
   const [openWorkout, setOpenWorkout] = useState<OpenWorkout | null>(null)
+  const [baseline, setBaseline] = useState<BaselineStatus>({ hasPhysique: false, hasSubstances: false, hasBloodwork: false })
 
   useEffect(() => {
     async function fetchAll() {
@@ -37,7 +44,7 @@ export default function HomePage() {
         const uid = user?.id
 
         const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-        const [summaryRes, profileRes, onbRes, openSessionRes] = await Promise.all([
+        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes] = await Promise.all([
           supabase.from('daily_summary').select('*').eq('date', dateStr).maybeSingle(),
           uid
             ? supabase.from('user_profile').select('*').eq('id', uid).maybeSingle()
@@ -55,6 +62,15 @@ export default function HomePage() {
                 .limit(1)
                 .maybeSingle()
             : Promise.resolve({ data: null }),
+          uid
+            ? supabase.from('physique_snapshots').select('id', { count: 'exact', head: true }).eq('user_id', uid)
+            : Promise.resolve({ count: 0 }),
+          uid
+            ? supabase.from('substances').select('id', { count: 'exact', head: true }).eq('user_id', uid)
+            : Promise.resolve({ count: 0 }),
+          uid
+            ? supabase.from('bloodwork_panels').select('id', { count: 'exact', head: true }).eq('user_id', uid)
+            : Promise.resolve({ count: 0 }),
         ])
 
         if (uid && profileRes.data) {
@@ -78,6 +94,11 @@ export default function HomePage() {
           setNeedsOnboarding(true)
         }
         if (openSessionRes.data) setOpenWorkout(openSessionRes.data as OpenWorkout)
+        setBaseline({
+          hasPhysique: (physiqueRes.count ?? 0) > 0,
+          hasSubstances: (substancesRes.count ?? 0) > 0,
+          hasBloodwork: (bloodworkRes.count ?? 0) > 0,
+        })
       } finally {
         setLoading(false)
       }
@@ -97,11 +118,43 @@ export default function HomePage() {
   }
 
   const macros = [
-    { label: 'Calories', value: today.calories_total, goal: GOALS.calories, unit: 'kcal', icon: Zap, color: 'text-amber-400' },
     { label: 'Protein', value: today.protein_g_total, goal: GOALS.protein_g, unit: 'g', icon: Beef, color: 'text-cyan-400' },
     { label: 'Carbs', value: today.carbs_g_total, goal: GOALS.carbs_g, unit: 'g', icon: Wheat, color: 'text-violet-400' },
+    { label: 'Fat', value: today.fat_g_total, goal: GOALS.fat_g, unit: 'g', icon: Droplet, color: 'text-rose-400' },
     { label: 'Water', value: Math.round((today.water_ml_total || 0) / 100) / 10, goal: GOALS.water_ml / 1000, unit: 'L', icon: Droplets, color: 'text-blue-400' },
   ]
+
+  const baselineDone = baseline.hasPhysique && baseline.hasSubstances && baseline.hasBloodwork
+  const showBaselineChecklist = !needsOnboarding && !baselineDone
+  const baselineSteps = [
+    {
+      key: 'physique',
+      done: baseline.hasPhysique,
+      href: '/progress',
+      icon: Camera,
+      title: 'Take baseline body photos',
+      sub: '4 angles — front, sides, back. AI gives you BF% + muscle dev.',
+      accent: 'rose',
+    },
+    {
+      key: 'substances',
+      done: baseline.hasSubstances,
+      href: '/substances',
+      icon: FlaskConical,
+      title: 'Build your stack',
+      sub: 'Log every substance — doses, frequency, route, schedule.',
+      accent: 'cyan',
+    },
+    {
+      key: 'bloodwork',
+      done: baseline.hasBloodwork,
+      href: '/bloodwork',
+      icon: Activity,
+      title: 'Upload your latest bloodwork',
+      sub: 'AI parses every marker, flags out-of-range values.',
+      accent: 'amber',
+    },
+  ] as const
 
   const intelligenceLinks = [
     { href: '/substances', icon: FlaskConical, label: 'Stack', color: 'text-cyan-400' },
@@ -183,6 +236,60 @@ export default function HomePage() {
             </CardContent>
           </Card>
         </Link>
+      )}
+
+      {showBaselineChecklist && (
+        <Card className="border-white/10 bg-gradient-to-b from-white/5 to-white/[0.02]">
+          <CardContent className="pt-4 pb-3 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-white">Set up your baseline</p>
+                <p className="text-[11px] text-white/50">
+                  {baselineSteps.filter(s => s.done).length} of {baselineSteps.length} complete — finish all 3 for full intelligence
+                </p>
+              </div>
+              <Sparkles size={18} className="text-amber-400/60" />
+            </div>
+            <div className="space-y-1.5">
+              {baselineSteps.map(step => {
+                const Icon = step.icon
+                const accentBorder =
+                  step.accent === 'rose' ? 'border-rose-400/30 hover:bg-rose-500/5' :
+                  step.accent === 'cyan' ? 'border-cyan-400/30 hover:bg-cyan-500/5' :
+                  'border-amber-400/30 hover:bg-amber-500/5'
+                const accentIcon =
+                  step.accent === 'rose' ? 'text-rose-400' :
+                  step.accent === 'cyan' ? 'text-cyan-400' :
+                  'text-amber-400'
+                return (
+                  <Link
+                    key={step.key}
+                    href={step.href}
+                    className={`flex items-center gap-2.5 p-2.5 rounded-lg border bg-white/[0.02] transition-colors ${
+                      step.done ? 'border-emerald-400/30 bg-emerald-500/5' : accentBorder
+                    }`}
+                  >
+                    {step.done ? (
+                      <CheckCircle2 size={18} className="text-emerald-400 flex-shrink-0" />
+                    ) : (
+                      <Circle size={18} className="text-white/30 flex-shrink-0" />
+                    )}
+                    <Icon size={16} className={step.done ? 'text-emerald-400/70' : accentIcon} />
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-xs font-semibold ${step.done ? 'text-white/60 line-through' : 'text-white'}`}>
+                        {step.title}
+                      </p>
+                      {!step.done && (
+                        <p className="text-[10px] text-white/50 truncate">{step.sub}</p>
+                      )}
+                    </div>
+                    {!step.done && <ChevronRight size={14} className="text-white/30 flex-shrink-0" />}
+                  </Link>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Calorie hero */}

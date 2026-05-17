@@ -35,9 +35,10 @@ function LoginInner() {
   )
   const [resendIn, setResendIn] = useState(0)
 
-  // Single OTP input ref (Supabase currently sends 7-digit codes, but we accept 4-10).
+  // Single OTP input ref. Supabase sends 7-digit codes; we cap input at 7.
   const codeInputRef = useRef<HTMLInputElement | null>(null)
   const autoSubmittedRef = useRef(false)
+  const autoSubmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Resend countdown
   useEffect(() => {
@@ -136,17 +137,28 @@ function LoginInner() {
   }, [code, email, redirectTo, router, verifying])
 
   function onCodeChange(value: string) {
-    // Strip non-digits, cap at 10 chars.
-    const clean = value.replace(/\D/g, '').slice(0, 10)
+    // Strip non-digits, cap at 7 (Supabase's exact OTP length).
+    // Hard cap prevents iOS autofill from appending stray digits from elsewhere in the email.
+    const clean = value.replace(/\D/g, '').slice(0, 7)
     setCode(clean)
     if (error) setError(null)
-    // Auto-submit when length hits 7 (Supabase's current OTP length). Trigger fires
-    // for both manual typing (digit-by-digit) and autofill/paste (full string in one event).
-    // CRITICAL: pass `clean` to verify() directly — React state hasn't flushed yet,
-    // so verify() reading `code` would see the stale value (iOS autofill bug).
+
+    // Cancel any pending auto-submit — iOS autofill pastes digit-by-digit with ~50ms
+    // gaps; debouncing waits for the burst to settle before we fire verify().
+    if (autoSubmitTimerRef.current) {
+      clearTimeout(autoSubmitTimerRef.current)
+      autoSubmitTimerRef.current = null
+    }
+
     if (clean.length === 7 && !autoSubmittedRef.current && !verifying) {
-      autoSubmittedRef.current = true
-      verify(clean)
+      // Schedule auto-submit 300ms after the LAST input event. If iOS keeps adding
+      // digits we cap at 7 and the next setTimeout replaces this one.
+      autoSubmitTimerRef.current = setTimeout(() => {
+        autoSubmittedRef.current = true
+        // Pass value directly — React state may not have flushed yet.
+        verify(clean)
+        autoSubmitTimerRef.current = null
+      }, 300)
     }
     if (clean.length < 7) autoSubmittedRef.current = false
   }
@@ -256,12 +268,12 @@ function LoginInner() {
                       inputMode="numeric"
                       pattern="\d*"
                       autoComplete="one-time-code"
-                      maxLength={10}
+                      maxLength={7}
                       value={code}
                       onChange={(e) => onCodeChange(e.target.value)}
                       onKeyDown={onCodeKeyDown}
                       onFocus={(e) => e.currentTarget.select()}
-                      placeholder="••••••"
+                      placeholder="• • • • • • •"
                       className="w-full h-14 text-center text-3xl font-mono font-bold tabular-nums tracking-[0.4em] bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-amber-400/50 focus:bg-white/10"
                       aria-label="One-time code"
                     />

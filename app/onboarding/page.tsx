@@ -401,6 +401,9 @@ export default function OnboardingPage() {
                   <input
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
+                    onBlur={(e) => setDisplayName(e.target.value)}
+                    onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setDisplayName(e.currentTarget.value) }}
+                    autoComplete="given-name"
                     placeholder="Vincenzo"
                     className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                   />
@@ -409,7 +412,10 @@ export default function OnboardingPage() {
                 <div>
                   <label className="text-xs text-white/50 uppercase tracking-wider">Age</label>
                   <input
-                    type="number" value={age} onChange={(e) => setAge(e.target.value)}
+                    type="number" value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    onBlur={(e) => setAge(e.target.value)}
+                    onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setAge(e.currentTarget.value) }}
                     className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                   />
                 </div>
@@ -432,6 +438,8 @@ export default function OnboardingPage() {
                         <input
                           type="number" min={0} max={9} value={heightFt}
                           onChange={(e) => setHeightFt(e.target.value)}
+                          onBlur={(e) => setHeightFt(e.target.value)}
+                          onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setHeightFt(e.currentTarget.value) }}
                           placeholder="5"
                           className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-9 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                         />
@@ -441,6 +449,8 @@ export default function OnboardingPage() {
                         <input
                           type="number" min={0} max={11} value={heightIn}
                           onChange={(e) => setHeightIn(e.target.value)}
+                          onBlur={(e) => setHeightIn(e.target.value)}
+                          onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setHeightIn(e.currentTarget.value) }}
                           placeholder="10"
                           className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-9 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                         />
@@ -452,6 +462,8 @@ export default function OnboardingPage() {
                       <input
                         type="number" min={0} max={300} step="0.1" value={heightCm}
                         onChange={(e) => setHeightCm(e.target.value)}
+                        onBlur={(e) => setHeightCm(e.target.value)}
+                        onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setHeightCm(e.currentTarget.value) }}
                         placeholder="178"
                         className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                       />
@@ -477,6 +489,8 @@ export default function OnboardingPage() {
                       <input
                         type="number" min={0} max={1000} step="0.1" value={weightLb}
                         onChange={(e) => setWeightLb(e.target.value)}
+                        onBlur={(e) => setWeightLb(e.target.value)}
+                        onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setWeightLb(e.currentTarget.value) }}
                         placeholder="180"
                         className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                       />
@@ -487,6 +501,8 @@ export default function OnboardingPage() {
                       <input
                         type="number" min={0} max={500} step="0.1" value={weightKg}
                         onChange={(e) => setWeightKg(e.target.value)}
+                        onBlur={(e) => setWeightKg(e.target.value)}
+                        onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setWeightKg(e.currentTarget.value) }}
                         placeholder="82"
                         className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                       />
@@ -510,8 +526,9 @@ export default function OnboardingPage() {
                 <Textarea
                   value={snapshotNotes}
                   onChange={(e) => setSnapshotNotes(e.target.value)}
-                  placeholder="Current physique state — weight, recent changes, anything to flag..."
-                  className="bg-white/5 border-white/10"
+                  onBlur={(e) => setSnapshotNotes(e.target.value)}
+                  placeholder="e.g. 180 lb, been lean-bulking 3 weeks, ~15% bf, lats and rear delts feel underdeveloped, want to lean out by July."
+                  className="bg-white/5 border-white/10 min-h-[80px]"
                 />
                 <p className="text-[10px] text-white/40">Optional — hit Skip if you&apos;d rather just go straight to photos.</p>
               </CardContent>
@@ -530,8 +547,9 @@ export default function OnboardingPage() {
                 <Textarea
                   value={stackNotes}
                   onChange={(e) => setStackNotes(e.target.value)}
-                  placeholder="Quick list: TRT, BPC-157, creatine, magnesium..."
-                  className="bg-white/5 border-white/10"
+                  onBlur={(e) => setStackNotes(e.target.value)}
+                  placeholder="e.g. TRT 250mg/wk, BPC-157 1iu daily, retatrutide 1iu Mondays, creatine 5g daily, magnesium glycinate, vitamin D3."
+                  className="bg-white/5 border-white/10 min-h-[80px]"
                 />
                 <p className="text-[10px] text-white/40">Optional — hit Skip if you&apos;re not on anything.</p>
               </CardContent>
@@ -547,6 +565,9 @@ export default function OnboardingPage() {
                     type="number" min={0} max={7}
                     value={rhythm.training_days_per_week}
                     onChange={(e) => setRhythm({ ...rhythm, training_days_per_week: e.target.value })}
+                    onBlur={(e) => setRhythm(r => ({ ...r, training_days_per_week: e.target.value }))}
+                    onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setRhythm(r => ({ ...r, training_days_per_week: e.currentTarget.value })) }}
+                    placeholder="5"
                     className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                   />
                 </div>
@@ -556,6 +577,9 @@ export default function OnboardingPage() {
                     type="number" min={0} max={14} step={0.5}
                     value={rhythm.avg_sleep_hours}
                     onChange={(e) => setRhythm({ ...rhythm, avg_sleep_hours: e.target.value })}
+                    onBlur={(e) => setRhythm(r => ({ ...r, avg_sleep_hours: e.target.value }))}
+                    onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setRhythm(r => ({ ...r, avg_sleep_hours: e.currentTarget.value })) }}
+                    placeholder="7.5"
                     className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                   />
                 </div>
@@ -575,8 +599,9 @@ export default function OnboardingPage() {
                 <Textarea
                   value={bloodworkNote}
                   onChange={(e) => setBloodworkNote(e.target.value)}
-                  placeholder="Last lab date, panels run, anything flagged..."
-                  className="bg-white/5 border-white/10"
+                  onBlur={(e) => setBloodworkNote(e.target.value)}
+                  placeholder="e.g. Last full panel March 2026, TT 850, E2 32, HDL 52, hsCRP 0.4 — everything looked dialed."
+                  className="bg-white/5 border-white/10 min-h-[80px]"
                 />
                 <p className="text-[10px] text-white/40">Optional — hit Skip if you don&apos;t have recent bloodwork.</p>
               </CardContent>
@@ -589,8 +614,10 @@ export default function OnboardingPage() {
                 <div>
                   <label className="text-xs text-white/50 uppercase tracking-wider">One goal for the next 30 days *</label>
                   <Textarea
-                    value={goal} onChange={(e) => setGoal(e.target.value)}
-                    placeholder="Drop 5lb, hit 200g protein daily, sleep 8h consistently..."
+                    value={goal}
+                    onChange={(e) => setGoal(e.target.value)}
+                    onBlur={(e) => setGoal(e.target.value)}
+                    placeholder="Drop 5 lb, hit 200g protein daily, sleep 8h consistently..."
                     className="bg-white/5 border-white/10 mt-1"
                   />
                 </div>
@@ -599,6 +626,8 @@ export default function OnboardingPage() {
                   <input
                     value={checkpoint}
                     onChange={(e) => setCheckpoint(e.target.value)}
+                    onBlur={(e) => setCheckpoint(e.target.value)}
+                    onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setCheckpoint(e.currentTarget.value) }}
                     placeholder="Weigh-in, body photo, retest E2..."
                     className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                   />
