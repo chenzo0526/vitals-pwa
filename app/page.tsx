@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle } from 'lucide-react'
+import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle, Calendar, Dumbbell } from 'lucide-react'
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 import { Skeleton, SkeletonCard } from '@/components/Skeleton'
@@ -19,6 +19,7 @@ type Today = {
 }
 
 type OpenWorkout = { id: string; focus: string | null; started_at: string }
+type NextScheduledWorkout = { id: string; focus: string | null; scheduled_at: string }
 
 type BaselineStatus = {
   hasPhysique: boolean
@@ -34,6 +35,7 @@ export default function HomePage() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [loading, setLoading] = useState(true)
   const [openWorkout, setOpenWorkout] = useState<OpenWorkout | null>(null)
+  const [nextScheduled, setNextScheduled] = useState<NextScheduledWorkout | null>(null)
   const [baseline, setBaseline] = useState<BaselineStatus>({ hasPhysique: false, hasSubstances: false, hasBloodwork: false })
 
   useEffect(() => {
@@ -44,7 +46,8 @@ export default function HomePage() {
         const uid = user?.id
 
         const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes] = await Promise.all([
+        const nowIso = new Date().toISOString()
+        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes] = await Promise.all([
           supabase.from('daily_summary').select('*').eq('date', dateStr).maybeSingle(),
           uid
             ? supabase.from('user_profile').select('*').eq('id', uid).maybeSingle()
@@ -71,6 +74,18 @@ export default function HomePage() {
           uid
             ? supabase.from('bloodwork_panels').select('id', { count: 'exact', head: true }).eq('user_id', uid)
             : Promise.resolve({ count: 0 }),
+          uid
+            ? supabase
+                .from('workout_sessions')
+                .select('id, focus, scheduled_at')
+                .eq('user_id', uid)
+                .is('started_at', null)
+                .not('scheduled_at', 'is', null)
+                .gte('scheduled_at', nowIso)
+                .order('scheduled_at', { ascending: true })
+                .limit(1)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
         ])
 
         if (uid && profileRes.data) {
@@ -94,6 +109,7 @@ export default function HomePage() {
           setNeedsOnboarding(true)
         }
         if (openSessionRes.data) setOpenWorkout(openSessionRes.data as OpenWorkout)
+        if (nextScheduledRes.data) setNextScheduled(nextScheduledRes.data as NextScheduledWorkout)
         setBaseline({
           hasPhysique: (physiqueRes.count ?? 0) > 0,
           hasSubstances: (substancesRes.count ?? 0) > 0,
@@ -222,6 +238,28 @@ export default function HomePage() {
             </CardContent>
           </Card>
         </motion.div>
+      )}
+
+      {/* Next scheduled workout — only when no active session is running. */}
+      {!openWorkout && nextScheduled && (
+        <Link href="/workout">
+          <Card className="border-amber-400/30 bg-gradient-to-r from-amber-400/10 to-amber-400/5 cursor-pointer hover:from-amber-400/20 hover:to-amber-400/10 transition-colors">
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-400/15 border border-amber-400/30 flex items-center justify-center flex-shrink-0">
+                <Dumbbell className="text-amber-400" size={18} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">
+                  {nextScheduled.focus || 'Workout'} scheduled
+                </p>
+                <p className="text-[11px] text-amber-200/80">
+                  {friendlyWhenHome(nextScheduled.scheduled_at)}
+                </p>
+              </div>
+              <Calendar className="text-amber-400/60 flex-shrink-0" size={16} />
+            </CardContent>
+          </Card>
+        </Link>
       )}
 
       {needsOnboarding && (
@@ -369,4 +407,25 @@ export default function HomePage() {
       </div>
     </div>
   )
+}
+
+// Friendly relative time for the home "next scheduled workout" pill.
+function friendlyWhenHome(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const diffMs = d.getTime() - now.getTime()
+  const diffMin = Math.round(diffMs / 60000)
+  const diffHr = Math.round(diffMs / 3600000)
+  const sameDay = d.toDateString() === now.toDateString()
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1)
+  const isTomorrow = d.toDateString() === tomorrow.toDateString()
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  if (sameDay) {
+    if (diffMin < 60 && diffMin >= 0) return `In ${diffMin}m · today ${time}`
+    return `Today, ${time} (in ${diffHr}h)`
+  }
+  if (isTomorrow) return `Tomorrow, ${time}`
+  const dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  return `${dateStr}, ${time}`
 }
