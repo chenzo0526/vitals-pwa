@@ -19,11 +19,12 @@ type MacroItem = {
   protein_g: number
   carbs_g: number
   fat_g: number
+  water_ml?: number
 }
 
 type Analysis = {
   items: MacroItem[]
-  total_macros: { calories: number; protein_g: number; carbs_g: number; fat_g: number }
+  total_macros: { calories: number; protein_g: number; carbs_g: number; fat_g: number; water_ml?: number }
   confidence: 'high' | 'medium' | 'low'
   notes?: string
 }
@@ -104,6 +105,7 @@ export default function FoodPage() {
       throw new Error('Not signed in')
     }
     const totals = a.total_macros || recompute(a.items)
+    const waterTotal = (totals.water_ml ?? a.items.reduce((s, i) => s + (i.water_ml || 0), 0)) || 0
     const { error: insertErr } = await supabase.from('intake_events').insert({
       ts: new Date().toISOString(),
       item: a.items.map((i) => i.name).join(', '),
@@ -112,6 +114,7 @@ export default function FoodPage() {
       protein_g: totals.protein_g,
       carbs_g: totals.carbs_g,
       fat_g: totals.fat_g,
+      water_ml: waterTotal,
       raw_input: 'food-vision',
       parsed_by: 'food-vision',
       user_id: userId,
@@ -351,7 +354,7 @@ function EditItemModal({
   const [f, setF] = useState(String(item.fat_g))
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}

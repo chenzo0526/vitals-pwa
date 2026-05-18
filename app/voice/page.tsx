@@ -21,11 +21,12 @@ type ParsedItem = {
   protein_g: number
   carbs_g: number
   fat_g: number
+  water_ml?: number
 }
 
 type Parsed = {
   items: ParsedItem[]
-  total_macros?: { calories: number; protein_g: number; carbs_g: number; fat_g: number }
+  total_macros?: { calories: number; protein_g: number; carbs_g: number; fat_g: number; water_ml?: number }
 }
 
 const SILENCE_MS = 3000
@@ -158,6 +159,7 @@ export default function VoicePage() {
       throw new Error('Not signed in')
     }
     const totals = p.total_macros || sumMacros(p.items)
+    const waterTotal = (totals.water_ml ?? p.items.reduce((s, i) => s + (i.water_ml || 0), 0)) || 0
     const { error: insertErr } = await supabase.from('intake_events').insert({
       ts: new Date().toISOString(),
       item: p.items.map((i) => i.name).join(', '),
@@ -168,6 +170,7 @@ export default function VoicePage() {
       protein_g: totals.protein_g,
       carbs_g: totals.carbs_g,
       fat_g: totals.fat_g,
+      water_ml: waterTotal,
       raw_input: (finalRef.current || transcriptFinal).trim(),
       parsed_by: 'voice-parse',
       user_id: userId,

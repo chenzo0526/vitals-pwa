@@ -143,7 +143,7 @@ function DefEditor({ onSave, onClose }: { onSave: (d: CustomMetricDef) => void; 
   const [d, setD] = useState<CustomMetricDef>({ name: '', unit: '', frequency: 'daily', metric_type: 'numeric', active: true })
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
       <Card className="border-white/10 bg-zinc-950 w-full max-w-md">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -209,7 +209,7 @@ function QuickLogDialog({ def, onLog, onClose }: {
   const [val, setVal] = useState<string>('')
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
       <Card className="border-white/10 bg-zinc-950 w-full max-w-md">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">

@@ -305,7 +305,7 @@ export default function RecoveryPage() {
 
       {/* Add / Edit dialog */}
       {showForm && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
           <Card className="border-rose-400/30 bg-zinc-950 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <CardContent className="p-4 space-y-3">
               <div className="flex items-center justify-between">

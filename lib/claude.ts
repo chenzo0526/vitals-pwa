@@ -5,15 +5,17 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
 })
 
-export const FOOD_ANALYSIS_PROMPT = `Identify all foods visible on this plate with estimated quantities. Return ONLY valid JSON:
+export const FOOD_ANALYSIS_PROMPT = `Identify all foods and beverages visible. Return ONLY valid JSON:
 {
   "items": [
-    {"name": string, "qty_estimate": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number}
+    {"name": string, "qty_estimate": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "water_ml": number}
   ],
-  "total_macros": {"calories": number, "protein_g": number, "carbs_g": number, "fat_g": number},
+  "total_macros": {"calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "water_ml": number},
   "confidence": "high" | "medium" | "low",
   "notes": string
-}`
+}
+
+For HYDRATION: when a water bottle, glass of water, coffee, tea, sparkling water, or similar primarily-water beverage is visible, estimate water_ml content. Standard sizes: small glass ~240ml, large glass ~500ml, standard water bottle ~500ml, large bottle ~1000ml, coffee cup ~240ml. Set water_ml: 0 (not omit) for items that aren't water-equivalents.`
 
 export const LABEL_OCR_PROMPT = `Extract all nutrition facts from this food label. Return ONLY valid JSON:
 {
@@ -115,13 +117,21 @@ Default units when not explicitly stated:
 Return JSON shape:
 {
   "items": [
-    {"name": string, "quantity": number, "unit": string, "qty_estimate": string, "estimated_calories": number, "protein_g": number, "carbs_g": number, "fat_g": number}
+    {"name": string, "quantity": number, "unit": string, "qty_estimate": string, "estimated_calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "water_ml": number}
   ],
-  "total_macros": {"calories": number, "protein_g": number, "carbs_g": number, "fat_g": number},
+  "total_macros": {"calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "water_ml": number},
   "confidence": "high" | "medium" | "low"
 }
 
 "qty_estimate" is the human-readable label, e.g. "8 small potatoes" or "1 cup".
+
+For HYDRATION: when the user mentions water, sparkling water, coffee (water portion), tea, soda water, or other primarily-water beverages, ESTIMATE the water_ml content of each item. Examples:
+- "drank a liter of water" → water_ml: 1000
+- "had a 16oz water" → water_ml: 473
+- "two cups of black coffee" → water_ml: 470 (1 cup ≈ 235ml)
+- "a glass of water" → water_ml: 240
+- "32 oz of water during my workout" → water_ml: 946
+Set water_ml to 0 (not omit) for solid foods and drinks that aren't water-equivalents (e.g., milk, juice, alcohol).
 
 Be generous with macro estimates when ambiguous — better to log SOMETHING than block on perfect numbers. Return ONLY the JSON object, no preamble or markdown.`
 

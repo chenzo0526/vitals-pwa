@@ -63,7 +63,7 @@ export default function BottomNav() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
-              className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
+              className="fixed inset-0 z-[55] bg-black/70 backdrop-blur-sm"
               onClick={close}
             />
             <motion.div
@@ -75,7 +75,7 @@ export default function BottomNav() {
               dragConstraints={{ top: 0, bottom: 0 }}
               dragElastic={0.3}
               onDragEnd={(_e, info) => { if (info.offset.y > 60) close() }}
-              className="fixed left-0 right-0 bottom-0 z-50 safe-bottom"
+              className="fixed left-0 right-0 bottom-0 z-[60] safe-bottom"
             >
               <div className="max-w-md mx-auto bg-zinc-950 border-t border-white/10 rounded-t-3xl px-4 pt-2 pb-6 shadow-2xl">
                 <div className="flex justify-center pb-2">
@@ -109,7 +109,11 @@ export default function BottomNav() {
         )}
       </AnimatePresence>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/95 backdrop-blur-xl safe-bottom">
+      <nav
+        className={`fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/95 backdrop-blur-xl safe-bottom transition-opacity ${
+          sheetOpen ? 'pointer-events-none opacity-0' : 'opacity-100'
+        }`}
+      >
         <div className="max-w-md mx-auto relative flex items-center justify-around px-1 py-2">
           {TABS.slice(0, 2).map((t) => <Tab key={t.href} {...t} active={isActive(pathname, t.href)} />)}
 

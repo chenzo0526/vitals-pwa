@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle, Calendar, Dumbbell } from 'lucide-react'
+import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle, Calendar, Dumbbell, Plus, Loader2 } from 'lucide-react'
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 import { Skeleton, SkeletonCard } from '@/components/Skeleton'
@@ -38,6 +38,7 @@ export default function HomePage() {
   const [openWorkout, setOpenWorkout] = useState<OpenWorkout | null>(null)
   const [nextScheduled, setNextScheduled] = useState<NextScheduledWorkout | null>(null)
   const [baseline, setBaseline] = useState<BaselineStatus>({ hasPhysique: false, hasSubstances: false, hasBloodwork: false })
+  const [addingWater, setAddingWater] = useState<number | null>(null)  // ml of pending add for the spinner
 
   useEffect(() => {
     async function fetchAll() {
@@ -123,6 +124,33 @@ export default function HomePage() {
     fetchAll()
   }, [])
 
+  async function addWater(ml: number) {
+    if (addingWater !== null) return
+    setAddingWater(ml)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { error: insErr } = await supabase.from('intake_events').insert({
+        user_id: user.id,
+        item: ml >= 1000 ? `Water (${(ml / 1000).toFixed(ml % 1000 === 0 ? 0 : 1)} L)` : `Water (${ml} ml)`,
+        qty_text: ml >= 1000 ? `${(ml / 1000).toFixed(ml % 1000 === 0 ? 0 : 1)} L` : `${ml} ml`,
+        water_ml: ml,
+        calories: 0,
+        protein_g: 0,
+        carbs_g: 0,
+        fat_g: 0,
+        parsed_by: 'quick_log',
+      })
+      if (insErr) throw new Error(insErr.message)
+      // Optimistic update — daily_summary trigger will catch up
+      setToday(t => ({ ...t, water_ml_total: (t.water_ml_total || 0) + ml }))
+    } catch (e) {
+      console.error('[home] water log failed:', e)
+    } finally {
+      setAddingWater(null)
+    }
+  }
+
   async function endOpenWorkout() {
     if (!openWorkout) return
     const startedAt = new Date(openWorkout.started_at)
@@ -142,7 +170,9 @@ export default function HomePage() {
   ]
 
   const baselineDone = baseline.hasPhysique && baseline.hasSubstances && baseline.hasBloodwork
-  const showBaselineChecklist = !needsOnboarding && !baselineDone
+  // Don't render checklist until baseline status is loaded — otherwise it flashes
+  // "0 of 3 complete" on every navigation back to home, even when fully done.
+  const showBaselineChecklist = !loading && !needsOnboarding && !baselineDone
   const baselineSteps = [
     {
       key: 'physique',
@@ -390,6 +420,36 @@ export default function HomePage() {
               </Card>
             ))}
       </div>
+
+      {/* Quick water log — one tap, no forms */}
+      <Card className="border-blue-400/20 bg-blue-500/[0.04]">
+        <CardContent className="p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-blue-200 font-bold flex items-center gap-1.5">
+              <Droplets size={12} /> Quick water
+            </p>
+            <p className="text-[10px] text-white/40 tabular-nums">
+              {Math.round((today.water_ml_total || 0) / 100) / 10} L today · goal {GOALS.water_ml / 1000} L
+            </p>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {[250, 500, 750, 1000].map((ml) => (
+              <button
+                key={ml}
+                onClick={() => addWater(ml)}
+                disabled={addingWater !== null}
+                className="flex items-center justify-center gap-1 py-2.5 rounded-md bg-blue-500/10 border border-blue-400/30 text-blue-200 text-xs font-bold tabular-nums hover:bg-blue-500/20 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {addingWater === ml ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : (
+                  <><Plus size={10} strokeWidth={3} />{ml >= 1000 ? `${ml/1000} L` : `${ml} ml`}</>
+                )}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Intelligence */}
       <div>
