@@ -128,6 +128,8 @@ export async function POST(req: NextRequest) {
         lab_provider: panel.lab_provider,
         drawn_on: panel.drawn_on,
         source_format: panel.source_format,
+        // CRITICAL: life context the user added for this panel. Use this heavily.
+        panel_context_notes: panel.notes || null,
         markers: markers.map(m => ({
           marker: m.marker,
           category: m.category,

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import Disclaimer from '@/components/Disclaimer'
 import {
   ChevronLeft, Sparkles, Loader2, RefreshCw, AlertTriangle, TrendingUp, TrendingDown,
-  FlaskConical, Activity, Beaker, Lightbulb, ChevronDown, ChevronUp,
+  FlaskConical, Activity, Beaker, Lightbulb, ChevronDown, ChevronUp, BookOpen, HelpCircle, Edit3, Check,
 } from 'lucide-react'
 
 type HotSpot = {
@@ -56,6 +56,7 @@ type Interpretation = {
   stack_interactions: StackInteraction[]
   suggested_next_labs: string[]
   lifestyle_dials: LifestyleDial[]
+  unknowns?: string[]
   context_summary?: string
 }
 
@@ -94,6 +95,9 @@ export default function BloodworkPanelDetailPage() {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAllMarkers, setShowAllMarkers] = useState(false)
+  const [editingNotes, setEditingNotes] = useState(false)
+  const [notesDraft, setNotesDraft] = useState('')
+  const [savingNotes, setSavingNotes] = useState(false)
 
   useEffect(() => {
     if (!panelId) return
@@ -104,7 +108,10 @@ export default function BloodworkPanelDetailPage() {
         supabase.from('bloodwork_markers').select('*').eq('panel_id', panelId).order('category'),
         supabase.from('bloodwork_interpretations').select('*').eq('panel_id', panelId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       ])
-      if (p) setPanel(p as BloodworkPanel)
+      if (p) {
+        setPanel(p as BloodworkPanel)
+        setNotesDraft((p as BloodworkPanel).notes || '')
+      }
       if (m) setMarkers(m as BloodworkMarker[])
       if (existing) {
         setInterpretation(existing.interpretation as Interpretation)
@@ -134,6 +141,25 @@ export default function BloodworkPanelDetailPage() {
       setError(e instanceof Error ? e.message : 'Failed to generate interpretation')
     } finally {
       setGenerating(false)
+    }
+  }
+
+  async function saveNotes() {
+    if (!panelId) return
+    setSavingNotes(true)
+    try {
+      const { error: updErr } = await supabase
+        .from('bloodwork_panels')
+        .update({ notes: notesDraft.trim() || null })
+        .eq('id', panelId)
+      if (updErr) throw new Error(updErr.message)
+      // Refresh panel state locally
+      setPanel((p) => p ? { ...p, notes: notesDraft.trim() || undefined } : p)
+      setEditingNotes(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save context')
+    } finally {
+      setSavingNotes(false)
     }
   }
 
@@ -182,6 +208,70 @@ export default function BloodworkPanelDetailPage() {
           {' · '}{markers.length} markers
         </p>
       </div>
+
+      {/* Life Context Notes — what was going on in your life around this draw.
+          This is what makes Vitals' Interpreter different from doctors who read numbers in isolation. */}
+      <Card className="border-violet-400/30 bg-gradient-to-br from-violet-500/[0.04] to-transparent">
+        <CardContent className="p-3.5 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <BookOpen size={14} className="text-violet-300" />
+              <p className="text-xs font-bold text-violet-200 uppercase tracking-wider">Life context</p>
+            </div>
+            {!editingNotes && (
+              <button
+                onClick={() => setEditingNotes(true)}
+                className="text-[10px] uppercase tracking-wider text-white/40 hover:text-white/80 flex items-center gap-1 px-1.5 py-0.5 rounded"
+              >
+                <Edit3 size={10} /> {panel.notes ? 'Edit' : 'Add'}
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] text-white/50 leading-relaxed">
+            What was happening in your life around this draw? Major life events, cycle ends, sleep changes, stress, training gaps. The Interpreter uses this to read the numbers in YOUR context — not in a vacuum like every doctor does.
+          </p>
+          {editingNotes ? (
+            <div className="space-y-2">
+              <textarea
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                onBlur={(e) => setNotesDraft(e.target.value)}
+                placeholder="e.g. Came off 2-year test cycle cold turkey in July to help mom through cancer diagnosis. Moved across country. 8 months of disrupted sleep, depression, no training, eating poorly. Bloodwork captures the bottom of that period."
+                rows={5}
+                className="w-full bg-black/30 border border-violet-400/30 rounded-md p-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-violet-400/60 leading-relaxed"
+              />
+              <div className="flex gap-2">
+                <Button
+                  onClick={saveNotes}
+                  disabled={savingNotes}
+                  className="flex-1 bg-violet-400 text-black hover:bg-violet-300 disabled:opacity-50 h-9 text-xs font-bold"
+                >
+                  {savingNotes ? <><Loader2 size={12} className="mr-1.5 animate-spin" /> Saving</> : <><Check size={12} className="mr-1.5" /> Save context</>}
+                </Button>
+                <Button
+                  onClick={() => { setEditingNotes(false); setNotesDraft(panel.notes || '') }}
+                  disabled={savingNotes}
+                  variant="outline"
+                  className="border-white/20 text-white/60 h-9 text-xs"
+                >
+                  Cancel
+                </Button>
+              </div>
+              {interpretation && (
+                <p className="text-[10px] text-amber-300/70 leading-relaxed">
+                  After saving, hit the refresh icon on the Interpreter to re-read the panel with this context.
+                </p>
+              )}
+            </div>
+          ) : panel.notes ? (
+            <p className="text-xs text-white/80 leading-relaxed whitespace-pre-line bg-black/20 rounded-md p-2.5 border border-white/5">
+              {panel.notes}
+            </p>
+          ) : (
+            <p className="text-[11px] text-white/40 italic">No context yet — the Interpreter will read the numbers in isolation.</p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* AI Interpreter Card */}
       <Card className="border-amber-400/30 bg-gradient-to-br from-amber-400/5 via-transparent to-violet-400/5 overflow-hidden">
@@ -342,6 +432,27 @@ export default function BloodworkPanelDetailPage() {
                         {lab}
                       </Badge>
                     ))}
+                  </div>
+                </Section>
+              )}
+
+              {/* Unknowns — what context the AI would want the user to fill in.
+                  This is the anti-doctor differentiator: explicit about its blind spots. */}
+              {interpretation.unknowns && interpretation.unknowns.length > 0 && (
+                <Section icon={HelpCircle} title="Add this context for a sharper read" accent="text-violet-300">
+                  <div className="rounded-lg border border-violet-400/20 bg-violet-500/5 p-2.5 space-y-1.5">
+                    {interpretation.unknowns.map((q, i) => (
+                      <p key={i} className="text-[11px] text-white/75 leading-relaxed flex items-start gap-1.5">
+                        <span className="text-violet-300/80 flex-shrink-0">·</span>
+                        <span>{q}</span>
+                      </p>
+                    ))}
+                    <button
+                      onClick={() => { setEditingNotes(true); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                      className="text-[10px] uppercase tracking-wider font-bold text-violet-300 hover:text-violet-200 mt-1.5 flex items-center gap-1"
+                    >
+                      <Edit3 size={10} /> Add life context above
+                    </button>
                   </div>
                 </Section>
               )}
