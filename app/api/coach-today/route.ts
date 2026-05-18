@@ -67,6 +67,10 @@ export async function GET(req: NextRequest) {
     const fortyEightHoursAheadIso = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
     const nowIso = new Date().toISOString()
 
+    // Life events from last 180 days OR currently ongoing — fed into Coach context so
+    // it can read training/sleep/mood patterns through the lens of what's happening in the user's life.
+    const oneEightyDaysAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
     const [
       onboardingRes,
       substancesRes,
@@ -77,6 +81,7 @@ export async function GET(req: NextRequest) {
       recentWorkoutsRes,
       latestPhysiqueRes,
       dailySummaryTodayRes,
+      lifeEventsRes,
     ] = await Promise.all([
       supabase.from('onboarding_progress').select('identity_data, rhythm_data, first_goal, thirty_day_checkpoint').eq('user_id', userId).maybeSingle(),
       supabase.from('substances').select('*').eq('user_id', userId).eq('active', true),
@@ -87,6 +92,13 @@ export async function GET(req: NextRequest) {
       supabase.from('workout_sessions').select('focus, started_at, ended_at, energy_pre, energy_post').eq('user_id', userId).not('started_at', 'is', null).gte('started_at', sevenDaysAgoIso).order('started_at', { ascending: false }).limit(10),
       supabase.from('physique_snapshots').select('ts, bf_percent_estimate, analysis_json').eq('user_id', userId).order('ts', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('daily_summary').select('*').eq('user_id', userId).eq('date', todayLocal).maybeSingle(),
+      supabase
+        .from('life_events')
+        .select('started_on, ended_on, category, title, description, impact_level')
+        .eq('user_id', userId)
+        .or(`ended_on.is.null,ended_on.gte.${oneEightyDaysAgo}`)
+        .order('started_on', { ascending: false })
+        .limit(20),
     ])
 
     const identity = (onboardingRes.data?.identity_data || {}) as Record<string, unknown>
@@ -166,6 +178,9 @@ export async function GET(req: NextRequest) {
             analysis: latestPhysiqueRes.data.analysis_json,
           }
         : null,
+      // CRITICAL CONTEXT: what's happening in the user's life right now and recently.
+      // Read training/sleep/mood/recovery patterns THROUGH this lens, not in isolation.
+      life_events_recent_or_ongoing: lifeEventsRes.data || [],
     }
 
     const rawResponse = await generateCoachInsights(JSON.stringify(context, null, 2))

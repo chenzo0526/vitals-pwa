@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Droplet, Brain, Sliders, CreditCard, Camera, Mic, ScanLine, Dumbbell,
   TrendingUp, History, FileText, Shield, Sparkles, ChevronRight, LogOut, Loader2,
+  BookOpen,
 } from 'lucide-react'
 import { isTrialing, trialDaysLeft, UserProfile } from '@/lib/tier'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,8 @@ const SECTIONS = [
   {
     title: 'Health intelligence',
     items: [
-      { href: '/bloodwork', icon: Droplet, label: 'Bloodwork', desc: 'Upload labs · AI extraction', accent: 'rose' },
+      { href: '/bloodwork', icon: Droplet, label: 'Bloodwork', desc: 'Upload labs · AI interpretation', accent: 'rose' },
+      { href: '/timeline', icon: BookOpen, label: 'Life Timeline', desc: 'Context the AI uses to read your data', accent: 'violet' },
       { href: '/rediagnosis', icon: Brain, label: 'Rediagnosis', desc: 'Weekly AI review', accent: 'violet' },
       { href: '/custom-metrics', icon: Sliders, label: 'Custom Metrics', desc: 'Track anything', accent: 'amber' },
     ],

@@ -75,13 +75,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'This panel has no markers to interpret. Re-upload the source file.' }, { status: 400 })
     }
 
-    // Pull user context — profile (from onboarding) + active stack + prior panels (for trend analysis)
+    // Pull user context — profile + active stack + prior panels for trends + LIFE EVENTS overlapping the panel window
+    // Life events from 12 months BEFORE the panel up to today — the AI uses these to read the bloodwork through the lens of what was happening.
+    const panelDate = panel.drawn_on || new Date().toISOString().split('T')[0]
+    const twelveMonthsBeforePanel = new Date(new Date(panelDate).getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
     const [
       profileRes,
       onboardingRes,
       substancesRes,
       priorPanelsRes,
       latestPhysiqueRes,
+      lifeEventsRes,
     ] = await Promise.all([
       supabase.from('user_profile').select('*').eq('id', userId).maybeSingle(),
       supabase.from('onboarding_progress').select('identity_data, rhythm_data, first_goal').eq('user_id', userId).maybeSingle(),
@@ -100,6 +105,12 @@ export async function POST(req: NextRequest) {
         .order('ts', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from('life_events')
+        .select('started_on, ended_on, category, title, description, impact_level')
+        .eq('user_id', userId)
+        .gte('started_on', twelveMonthsBeforePanel)
+        .order('started_on', { ascending: false }),
     ])
 
     // Pull markers from prior panels for trend analysis
@@ -170,6 +181,8 @@ export async function POST(req: NextRequest) {
           unit: m.unit,
         })),
       })),
+      // LIFE EVENTS in the 12 months leading up to this panel — the AI MUST read the data through this lens
+      life_events_in_window: lifeEventsRes.data || [],
     }
 
     const rawResponse = await generateBloodworkInterpretation(JSON.stringify(context, null, 2))

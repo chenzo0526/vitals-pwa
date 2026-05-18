@@ -147,6 +147,56 @@ export type CustomMetricDef = {
   user_id?: string
 }
 
+export type LifeEventCategory =
+  | 'family_illness' | 'loss' | 'move' | 'job_change' | 'relationship'
+  | 'sleep_disruption' | 'cycle_change' | 'training_gap' | 'stress_event'
+  | 'travel' | 'mental_health' | 'injury' | 'other'
+
+export type LifeEvent = {
+  id?: string
+  user_id?: string
+  started_on: string  // YYYY-MM-DD
+  ended_on?: string | null
+  category: LifeEventCategory
+  title: string
+  description?: string | null
+  impact_level: 'low' | 'medium' | 'high'
+  created_at?: string
+  updated_at?: string
+}
+
+export const LIFE_EVENT_LABELS: Record<LifeEventCategory, string> = {
+  family_illness: 'Family illness',
+  loss: 'Loss / grief',
+  move: 'Move / relocation',
+  job_change: 'Job change',
+  relationship: 'Relationship',
+  sleep_disruption: 'Sleep disruption',
+  cycle_change: 'Cycle / protocol change',
+  training_gap: 'Training gap',
+  stress_event: 'Stress event',
+  travel: 'Major travel',
+  mental_health: 'Mental health',
+  injury: 'Injury',
+  other: 'Other',
+}
+
+export const LIFE_EVENT_COLORS: Record<LifeEventCategory, string> = {
+  family_illness: 'border-rose-400/30 bg-rose-500/5 text-rose-200',
+  loss: 'border-violet-400/30 bg-violet-500/5 text-violet-200',
+  move: 'border-amber-400/30 bg-amber-500/5 text-amber-200',
+  job_change: 'border-cyan-400/30 bg-cyan-500/5 text-cyan-200',
+  relationship: 'border-pink-400/30 bg-pink-500/5 text-pink-200',
+  sleep_disruption: 'border-indigo-400/30 bg-indigo-500/5 text-indigo-200',
+  cycle_change: 'border-cyan-400/30 bg-cyan-500/5 text-cyan-200',
+  training_gap: 'border-emerald-400/30 bg-emerald-500/5 text-emerald-200',
+  stress_event: 'border-orange-400/30 bg-orange-500/5 text-orange-200',
+  travel: 'border-sky-400/30 bg-sky-500/5 text-sky-200',
+  mental_health: 'border-violet-400/30 bg-violet-500/5 text-violet-200',
+  injury: 'border-rose-400/30 bg-rose-500/5 text-rose-200',
+  other: 'border-slate-400/30 bg-slate-500/5 text-slate-200',
+}
+
 export const SUBSTANCE_CATEGORY_COLORS: Record<string, string> = {
   hormones: 'bg-rose-500/20 border-rose-400/40 text-rose-300',
   peptides: 'bg-cyan-500/20 border-cyan-400/40 text-cyan-300',

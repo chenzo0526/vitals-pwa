@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { supabase, BloodworkPanel, BloodworkMarker } from '@/lib/supabase'
+import { supabase, BloodworkPanel, BloodworkMarker, LifeEvent, LIFE_EVENT_LABELS, LIFE_EVENT_COLORS } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -98,6 +98,7 @@ export default function BloodworkPanelDetailPage() {
   const [editingNotes, setEditingNotes] = useState(false)
   const [notesDraft, setNotesDraft] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
+  const [relevantEvents, setRelevantEvents] = useState<LifeEvent[]>([])
 
   useEffect(() => {
     if (!panelId) return
@@ -117,6 +118,18 @@ export default function BloodworkPanelDetailPage() {
         setInterpretation(existing.interpretation as Interpretation)
         setGeneratedAt(existing.created_at)
         setCached(true)
+      }
+      // Pull life events that overlap with this panel's 12-month window
+      if (p && (p as BloodworkPanel).drawn_on) {
+        const panelDate = (p as BloodworkPanel).drawn_on!
+        const twelveBefore = new Date(new Date(panelDate).getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        const { data: events } = await supabase
+          .from('life_events')
+          .select('*')
+          .gte('started_on', twelveBefore)
+          .lte('started_on', panelDate)
+          .order('started_on', { ascending: false })
+        if (events) setRelevantEvents(events as LifeEvent[])
       }
       setLoading(false)
     })()
@@ -272,6 +285,34 @@ export default function BloodworkPanelDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Life events in the 12 months before this panel — Interpreter uses these */}
+      {relevantEvents.length > 0 && (
+        <Card className="border-white/10 bg-white/[0.03]">
+          <CardContent className="p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-wider text-white/40 flex items-center gap-1.5">
+                <BookOpen size={11} /> Life events in the 12 months before this draw
+              </p>
+              <Link href="/timeline" className="text-[10px] uppercase tracking-wider text-violet-300 hover:text-violet-200">
+                Manage timeline
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {relevantEvents.map((ev) => (
+                <span
+                  key={ev.id}
+                  className={`text-[10px] px-2 py-1 rounded-md border ${LIFE_EVENT_COLORS[ev.category]}`}
+                  title={ev.description || ev.title}
+                >
+                  {ev.title}
+                  <span className="opacity-50 ml-1">· {LIFE_EVENT_LABELS[ev.category]}</span>
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* AI Interpreter Card */}
       <Card className="border-amber-400/30 bg-gradient-to-br from-amber-400/5 via-transparent to-violet-400/5 overflow-hidden">
