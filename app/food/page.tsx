@@ -50,8 +50,9 @@ export default function FoodPage() {
         protein_g: acc.protein_g + (i.protein_g || 0),
         carbs_g: acc.carbs_g + (i.carbs_g || 0),
         fat_g: acc.fat_g + (i.fat_g || 0),
+        water_ml: acc.water_ml + (i.water_ml || 0),
       }),
-      { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+      { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, water_ml: 0 },
     )
   }
 

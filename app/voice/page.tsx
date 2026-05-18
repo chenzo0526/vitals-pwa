@@ -357,8 +357,9 @@ function sumMacros(items: ParsedItem[]) {
       protein_g: acc.protein_g + (it.protein_g || 0),
       carbs_g: acc.carbs_g + (it.carbs_g || 0),
       fat_g: acc.fat_g + (it.fat_g || 0),
+      water_ml: acc.water_ml + (it.water_ml || 0),
     }),
-    { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+    { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, water_ml: 0 },
   )
 }
 
