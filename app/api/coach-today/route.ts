@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { generateCoachInsights } from '@/lib/claude'
+import { computeCalorieTarget, CalorieGoal } from '@/lib/calorieTarget'
+
+function inferCalorieGoalFromText(text: string | null | undefined): CalorieGoal {
+  if (!text) return 'maintain'
+  const t = text.toLowerCase()
+  if (/aggressive\s*cut|drop\s*\d+\s*lb|lose\s*\d+\s*lb|cut\s*hard|crash\s*diet/.test(t)) return 'aggressive_cut'
+  if (/\bcut\b|\blose\b|\bdrop\b|\blean\s*out|\bshred|fat\s*loss/.test(t)) return 'moderate_cut'
+  if (/aggressive\s*bulk|mass\s*gain|gain\s*\d+\s*lb/.test(t)) return 'aggressive_bulk'
+  if (/\bbulk\b|\bgain\b|jacked|build\s*muscle|add\s*size|recomp/.test(t)) return 'lean_bulk'
+  return 'maintain'
+}
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -123,6 +134,17 @@ export async function GET(req: NextRequest) {
     const identity = (onboardingRes.data?.identity_data || {}) as Record<string, unknown>
     const rhythm = (onboardingRes.data?.rhythm_data || {}) as Record<string, unknown>
 
+    // Compute calorie target so Coach can talk in real numbers, not abstract deficit advice
+    const inferredGoal = inferCalorieGoalFromText(onboardingRes.data?.first_goal ?? null)
+    const calTarget = computeCalorieTarget({
+      age: identity.age ? Number(identity.age) : null,
+      sex: 'male',
+      weight_kg: identity.weight_kg ? Number(identity.weight_kg) : null,
+      height_cm: identity.height_cm ? Number(identity.height_cm) : null,
+      training_days_per_week: rhythm.training_days_per_week ? Number(rhythm.training_days_per_week) : null,
+      goal: inferredGoal,
+    })
+
     // Compose the context payload
     const context = {
       today: todayLocal,
@@ -205,6 +227,19 @@ export async function GET(req: NextRequest) {
       daily_checkins_last_7d: recentCheckinsRes.data || [],
       // Biometric data — HRV, RHR, sleep stages, recovery scores. Watch HRV drops + RHR rises = overtraining/stress.
       biometrics_last_7d: recentBiometricsRes.data || [],
+      // Calorie / macro targets — use these for nutrition timing + deficit specificity
+      calorie_target: calTarget.is_complete ? {
+        goal: inferredGoal,
+        bmr: calTarget.bmr,
+        tdee: calTarget.tdee,
+        target_kcal: calTarget.target,
+        delta_kcal_per_day: calTarget.delta,
+        protein_g_target: calTarget.protein_g_target,
+        carbs_g_target: calTarget.carbs_g_target,
+        fat_g_target: calTarget.fat_g_target,
+        activity_level: calTarget.activity_level,
+        rationale: calTarget.rationale,
+      } : null,
     }
 
     const rawResponse = await generateCoachInsights(JSON.stringify(context, null, 2))

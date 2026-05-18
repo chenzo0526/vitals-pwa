@@ -12,8 +12,21 @@ import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 import { Skeleton, SkeletonCard } from '@/components/Skeleton'
 import CoachInsightCard from '@/components/CoachInsightCard'
+import { computeCalorieTarget, CalorieGoal, CalorieTargetResult } from '@/lib/calorieTarget'
 
-const GOALS = { calories: 2400, protein_g: 180, carbs_g: 250, fat_g: 80, water_ml: 3000 }
+const DEFAULT_GOALS = { calories: 2400, protein_g: 180, carbs_g: 250, fat_g: 80, water_ml: 3000 }
+
+// Infer calorie goal from the user's stated first_goal text (best-effort heuristic).
+// User can override via /more later. Defaults to maintain.
+function inferCalorieGoalFromText(text: string | null | undefined): CalorieGoal {
+  if (!text) return 'maintain'
+  const t = text.toLowerCase()
+  if (/aggressive\s*cut|drop\s*\d+\s*lb|lose\s*\d+\s*lb|cut\s*hard|crash\s*diet/.test(t)) return 'aggressive_cut'
+  if (/\bcut\b|\blose\b|\bdrop\b|\blean\s*out|\bshred|fat\s*loss/.test(t)) return 'moderate_cut'
+  if (/aggressive\s*bulk|mass\s*gain|gain\s*\d+\s*lb/.test(t)) return 'aggressive_bulk'
+  if (/\bbulk\b|\bgain\b|jacked|build\s*muscle|add\s*size|recomp/.test(t)) return 'lean_bulk'
+  return 'maintain'
+}
 
 type Today = {
   calories_total: number; protein_g_total: number; carbs_g_total: number; fat_g_total: number; water_ml_total: number
@@ -39,6 +52,7 @@ export default function HomePage() {
   const [nextScheduled, setNextScheduled] = useState<NextScheduledWorkout | null>(null)
   const [baseline, setBaseline] = useState<BaselineStatus>({ hasPhysique: false, hasSubstances: false, hasBloodwork: false })
   const [addingWater, setAddingWater] = useState<number | null>(null)  // ml of pending add for the spinner
+  const [calTarget, setCalTarget] = useState<CalorieTargetResult | null>(null)
 
   useEffect(() => {
     async function fetchAll() {
@@ -49,7 +63,7 @@ export default function HomePage() {
 
         const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
         const nowIso = new Date().toISOString()
-        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes] = await Promise.all([
+        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, onboardingDataRes] = await Promise.all([
           supabase.from('daily_summary').select('*').eq('date', dateStr).maybeSingle(),
           uid
             ? supabase.from('user_profile').select('*').eq('id', uid).maybeSingle()
@@ -88,6 +102,9 @@ export default function HomePage() {
                 .limit(1)
                 .maybeSingle()
             : Promise.resolve({ data: null }),
+          uid
+            ? supabase.from('onboarding_progress').select('identity_data, rhythm_data, first_goal').eq('user_id', uid).maybeSingle()
+            : Promise.resolve({ data: null }),
         ])
 
         if (uid && profileRes.data) {
@@ -117,6 +134,20 @@ export default function HomePage() {
           hasSubstances: (substancesRes.count ?? 0) > 0,
           hasBloodwork: (bloodworkRes.count ?? 0) > 0,
         })
+
+        // Compute personalized calorie target from profile data
+        const identity = (onboardingDataRes.data?.identity_data || {}) as Record<string, unknown>
+        const rhythm = (onboardingDataRes.data?.rhythm_data || {}) as Record<string, unknown>
+        const inferredGoal = inferCalorieGoalFromText(onboardingDataRes.data?.first_goal ?? null)
+        const target = computeCalorieTarget({
+          age: identity.age ? Number(identity.age) : null,
+          sex: 'male',
+          weight_kg: identity.weight_kg ? Number(identity.weight_kg) : null,
+          height_cm: identity.height_cm ? Number(identity.height_cm) : null,
+          training_days_per_week: rhythm.training_days_per_week ? Number(rhythm.training_days_per_week) : null,
+          goal: inferredGoal,
+        })
+        setCalTarget(target)
       } finally {
         setLoading(false)
       }
@@ -162,12 +193,24 @@ export default function HomePage() {
     setOpenWorkout(null)
   }
 
+  // Personalized macro targets from calorie engine — falls back to DEFAULT_GOALS when profile incomplete
+  const goals = calTarget && calTarget.is_complete ? {
+    calories: calTarget.target,
+    protein_g: calTarget.protein_g_target,
+    carbs_g: calTarget.carbs_g_target,
+    fat_g: calTarget.fat_g_target,
+    water_ml: DEFAULT_GOALS.water_ml,
+  } : DEFAULT_GOALS
+
   const macros = [
-    { label: 'Protein', value: today.protein_g_total, goal: GOALS.protein_g, unit: 'g', icon: Beef, color: 'text-cyan-400' },
-    { label: 'Carbs', value: today.carbs_g_total, goal: GOALS.carbs_g, unit: 'g', icon: Wheat, color: 'text-violet-400' },
-    { label: 'Fat', value: today.fat_g_total, goal: GOALS.fat_g, unit: 'g', icon: Droplet, color: 'text-rose-400' },
-    { label: 'Water', value: Math.round((today.water_ml_total || 0) / 100) / 10, goal: GOALS.water_ml / 1000, unit: 'L', icon: Droplets, color: 'text-blue-400' },
+    { label: 'Protein', value: today.protein_g_total, goal: goals.protein_g, unit: 'g', icon: Beef, color: 'text-cyan-400' },
+    { label: 'Carbs', value: today.carbs_g_total, goal: goals.carbs_g, unit: 'g', icon: Wheat, color: 'text-violet-400' },
+    { label: 'Fat', value: today.fat_g_total, goal: goals.fat_g, unit: 'g', icon: Droplet, color: 'text-rose-400' },
+    { label: 'Water', value: Math.round((today.water_ml_total || 0) / 100) / 10, goal: goals.water_ml / 1000, unit: 'L', icon: Droplets, color: 'text-blue-400' },
   ]
+
+  const caloriesRemaining = goals.calories - today.calories_total
+  const caloriesPctOfTarget = goals.calories > 0 ? (today.calories_total / goals.calories) * 100 : 0
 
   const baselineDone = baseline.hasPhysique && baseline.hasSubstances && baseline.hasBloodwork
   // Don't render checklist until baseline status is loaded — otherwise it flashes
@@ -364,26 +407,54 @@ export default function HomePage() {
       {/* AI Coach — daily cross-data intelligence. The WOW card. */}
       {!needsOnboarding && <CoachInsightCard />}
 
-      {/* Calorie hero */}
+      {/* Calorie hero — personalized target, with remaining/over indicator */}
       {loading ? (
         <SkeletonCard />
       ) : (
         <Card className="border-white/10 bg-white/5">
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center justify-between mb-3">
+          <CardContent className="pt-5 pb-4 space-y-2">
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-white/50 text-xs uppercase tracking-wider">Today</p>
                 <p className="text-3xl font-bold text-amber-400 tabular-nums">
                   {today.calories_total.toLocaleString()}
-                  <span className="text-sm text-white/40 font-normal ml-1">/ {GOALS.calories} kcal</span>
+                  <span className="text-sm text-white/40 font-normal ml-1">/ {goals.calories.toLocaleString()} kcal</span>
                 </p>
+                {calTarget && (
+                  <p className="text-[10px] text-white/40 mt-0.5 leading-tight">
+                    {calTarget.is_complete ? (
+                      <>
+                        TDEE {calTarget.tdee.toLocaleString()} kcal
+                        {calTarget.delta !== 0 && (
+                          <span className={calTarget.delta < 0 ? 'text-rose-300' : 'text-emerald-300'}>
+                            {' '}· {calTarget.delta < 0 ? '' : '+'}{calTarget.delta} kcal goal
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-amber-300/70">Add age/height/weight in profile for personalized target</span>
+                    )}
+                  </p>
+                )}
               </div>
               <Zap size={32} className="text-amber-400/30" />
             </div>
             <Progress
-              value={Math.min(100, (today.calories_total / GOALS.calories) * 100)}
+              value={Math.min(100, caloriesPctOfTarget)}
               className="h-2 bg-white/10"
             />
+            <p className={`text-[11px] tabular-nums ${
+              caloriesRemaining > 200 ? 'text-emerald-300' :
+              caloriesRemaining > 0 ? 'text-amber-300' :
+              caloriesRemaining > -200 ? 'text-orange-300' :
+              'text-rose-300'
+            }`}>
+              {caloriesRemaining > 0
+                ? `${caloriesRemaining.toLocaleString()} kcal remaining`
+                : caloriesRemaining === 0
+                ? 'On target'
+                : `${Math.abs(caloriesRemaining).toLocaleString()} kcal over`}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -429,7 +500,7 @@ export default function HomePage() {
               <Droplets size={12} /> Quick water
             </p>
             <p className="text-[10px] text-white/40 tabular-nums">
-              {Math.round((today.water_ml_total || 0) / 100) / 10} L today · goal {GOALS.water_ml / 1000} L
+              {Math.round((today.water_ml_total || 0) / 100) / 10} L today · goal {goals.water_ml / 1000} L
             </p>
           </div>
           <div className="grid grid-cols-4 gap-1.5">

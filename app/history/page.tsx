@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { History, Flame, Beef, Dumbbell } from 'lucide-react'
+import { History, Flame, Beef, Dumbbell, ChevronRight } from 'lucide-react'
 import { getLastNDates, getLocalDateString, parseLocalDate } from '@/lib/dates'
 import { Skeleton } from '@/components/Skeleton'
 import { EmptyState } from '@/components/EmptyState'
@@ -142,33 +143,38 @@ export default function HistoryPage() {
             const isToday = day.date === getLocalDateString()
             return (
               <motion.div key={day.date} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
-                <Card className={`border-white/10 ${isToday ? 'bg-amber-400/5 border-amber-400/20' : 'bg-white/5'}`}>
-                  <CardContent className="py-3 px-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-white text-sm font-medium">
-                            {parseLocalDate(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </p>
-                          {isToday && <Badge className="text-[9px] bg-amber-400/20 text-amber-400 border-amber-400/30 py-0">Today</Badge>}
+                <Link href={`/history/${day.date}`} className="block">
+                  <Card className={`border-white/10 cursor-pointer hover:bg-white/[0.08] transition-colors ${isToday ? 'bg-amber-400/5 border-amber-400/20' : 'bg-white/5'}`}>
+                    <CardContent className="py-3 px-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-white text-sm font-medium">
+                              {parseLocalDate(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                            </p>
+                            {isToday && <Badge className="text-[9px] bg-amber-400/20 text-amber-400 border-amber-400/30 py-0">Today</Badge>}
+                          </div>
+                          <div className="flex gap-3 mt-0.5">
+                            <span className="text-amber-400 text-xs flex items-center gap-0.5 tabular-nums">
+                              <Flame size={10} /> {day.calories_total || '—'}
+                            </span>
+                            <span className="text-cyan-400 text-xs flex items-center gap-0.5 tabular-nums">
+                              <Beef size={10} /> {day.protein_g_total || '—'}g
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex gap-3 mt-0.5">
-                          <span className="text-amber-400 text-xs flex items-center gap-0.5 tabular-nums">
-                            <Flame size={10} /> {day.calories_total || '—'}
-                          </span>
-                          <span className="text-cyan-400 text-xs flex items-center gap-0.5 tabular-nums">
-                            <Beef size={10} /> {day.protein_g_total || '—'}g
-                          </span>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {day.workout_count > 0 && (
+                            <Badge className="bg-emerald-400/20 text-emerald-300 border-emerald-400/30 text-xs flex items-center gap-1 tabular-nums">
+                              <Dumbbell size={10} /> {day.workout_count}
+                            </Badge>
+                          )}
+                          <ChevronRight size={14} className="text-white/30" />
                         </div>
                       </div>
-                      {day.workout_count > 0 && (
-                        <Badge className="bg-emerald-400/20 text-emerald-300 border-emerald-400/30 text-xs flex items-center gap-1 tabular-nums">
-                          <Dumbbell size={10} /> {day.workout_count}
-                        </Badge>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </Link>
               </motion.div>
             )
           })}

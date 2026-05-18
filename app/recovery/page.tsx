@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Heart, Activity, Moon, Loader2, ChevronLeft, AlertTriangle, Check, RefreshCw, History,
-  Watch, Plus, Trash2, Edit3, TrendingUp, TrendingDown,
+  Watch, Plus, Trash2, Edit3, TrendingUp, TrendingDown, Smartphone, Copy, ClipboardCheck, Eye, EyeOff,
 } from 'lucide-react'
 
 type BiometricEntry = {
@@ -73,8 +73,56 @@ export default function RecoveryPage() {
   const [form, setForm] = useState<FormState>(emptyForm())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [importToken, setImportToken] = useState<string | null>(null)
+  const [showToken, setShowToken] = useState(false)
+  const [copiedToken, setCopiedToken] = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadOrCreateToken() }, [])
+
+  async function loadOrCreateToken() {
+    const userId = await getCurrentUserId()
+    if (!userId) return
+    const { data: existing } = await supabase
+      .from('import_tokens')
+      .select('token')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (existing?.token) {
+      setImportToken(existing.token)
+      return
+    }
+    // Generate a fresh token client-side
+    const bytes = new Uint8Array(24)
+    crypto.getRandomValues(bytes)
+    const newToken = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+    const { error: insErr } = await supabase.from('import_tokens').insert({
+      user_id: userId,
+      token: newToken,
+      source_hint: 'apple_health',
+    })
+    if (!insErr) setImportToken(newToken)
+  }
+
+  async function copyImportUrl() {
+    if (!importToken) return
+    const url = `${window.location.origin}/api/import-health?token=${importToken}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopiedToken(true)
+      setTimeout(() => setCopiedToken(false), 2500)
+    } catch {}
+  }
+
+  async function rotateToken() {
+    if (!confirm('Rotate import token? Your wearable will need to be reconfigured with the new URL.')) return
+    const userId = await getCurrentUserId()
+    if (!userId) return
+    const bytes = new Uint8Array(24)
+    crypto.getRandomValues(bytes)
+    const newToken = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+    await supabase.from('import_tokens').update({ token: newToken }).eq('user_id', userId)
+    setImportToken(newToken)
+  }
 
   async function load() {
     setLoading(true)
@@ -213,6 +261,48 @@ export default function RecoveryPage() {
           <AlertTriangle size={12} className="mt-0.5" /> <span>{error}</span>
         </div>
       )}
+
+      {/* Apple Health / wearable import card */}
+      <Card className="border-cyan-400/20 bg-cyan-500/[0.04]">
+        <CardContent className="p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-wider font-bold text-cyan-300 flex items-center gap-1.5">
+              <Smartphone size={12} /> Auto-import from Apple Watch / WHOOP / Oura
+            </p>
+            <button
+              onClick={() => setShowToken((s) => !s)}
+              className="text-[10px] uppercase tracking-wider text-white/40 hover:text-white/80 flex items-center gap-1"
+            >
+              {showToken ? <><EyeOff size={11} /> Hide</> : <><Eye size={11} /> Show URL</>}
+            </button>
+          </div>
+          <p className="text-[11px] text-white/65 leading-relaxed">
+            Install <a href="https://www.healthyapps.dev/health-auto-export" target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline">Health Auto Export</a> (iOS, $5). In its REST API setting, paste the URL below. Schedule daily exports — HRV, RHR, sleep, steps all flow into Vitals automatically.
+          </p>
+          {showToken && importToken && (
+            <div className="bg-black/40 border border-white/10 rounded-md p-2 space-y-2">
+              <p className="text-[9px] text-white/40 uppercase tracking-wider">Your import URL (keep private)</p>
+              <div className="flex items-center gap-2">
+                <code className="text-[10px] text-cyan-200 font-mono break-all flex-1">
+                  {typeof window !== 'undefined' ? `${window.location.origin}/api/import-health?token=${importToken.slice(0, 8)}…${importToken.slice(-4)}` : ''}
+                </code>
+                <button
+                  onClick={copyImportUrl}
+                  className="text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md bg-cyan-400/20 border border-cyan-400/40 text-cyan-200 hover:bg-cyan-400/30 flex items-center gap-1 flex-shrink-0"
+                >
+                  {copiedToken ? <><ClipboardCheck size={11} /> Copied</> : <><Copy size={11} /> Copy full</>}
+                </button>
+              </div>
+              <button
+                onClick={rotateToken}
+                className="text-[10px] uppercase tracking-wider text-rose-300/70 hover:text-rose-300 flex items-center gap-1"
+              >
+                <RefreshCw size={9} /> Rotate token
+              </button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Empty state */}
       {!loading && entries.length === 0 && !showForm && (

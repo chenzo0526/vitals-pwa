@@ -1,0 +1,235 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServiceRoleClient } from '@/lib/supabase-server'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+// Apple Health / wearable import endpoint.
+// User configures the Health Auto Export iOS app (or any equivalent) to POST JSON here with their token in the X-Vitals-Token header.
+//
+// Accepts two shapes:
+//
+// 1. Health Auto Export "Aggregated" JSON shape:
+//    {
+//      "data": {
+//        "metrics": [
+//          { "name": "heart_rate_variability", "units": "ms", "data": [{ "date": "2026-05-18 03:00:00", "qty": 62.3 }] },
+//          { "name": "resting_heart_rate", "units": "count/min", "data": [{ "date": "...", "qty": 58 }] },
+//          { "name": "sleep_analysis", "data": [{ "startDate": "...", "endDate": "...", "value": "Asleep" }] },
+//          { "name": "step_count", "data": [{ "date": "...", "qty": 8421 }] },
+//          ...
+//        ]
+//      }
+//    }
+//
+// 2. Simple direct shape (anyone scripting their own import):
+//    {
+//      "entries": [
+//        { "for_date": "2026-05-18", "source": "apple_health", "hrv_rmssd": 62.3, "rhr_bpm": 58, "sleep_total_min": 480, "steps": 8421 }
+//      ]
+//    }
+//
+// Each entry upserts into biometric_entries on (user_id, for_date, source).
+
+type HAEMetric = {
+  name: string
+  units?: string
+  data?: Array<{
+    date?: string
+    startDate?: string
+    endDate?: string
+    qty?: number
+    value?: string | number
+    Avg?: number
+    Max?: number
+    Min?: number
+  }>
+}
+
+type DirectEntry = {
+  for_date: string
+  source?: string
+  hrv_rmssd?: number
+  rhr_bpm?: number
+  sleep_total_min?: number
+  sleep_deep_min?: number
+  sleep_rem_min?: number
+  sleep_light_min?: number
+  sleep_awake_min?: number
+  sleep_efficiency_pct?: number
+  steps?: number
+  active_calories?: number
+  total_calories?: number
+  recovery_score?: number
+  strain_score?: number
+  readiness_score?: number
+  body_temp_c?: number
+  spo2_pct?: number
+  respiratory_rate?: number
+  notes?: string
+}
+
+type ImportPayload = {
+  data?: { metrics?: HAEMetric[] }
+  entries?: DirectEntry[]
+}
+
+function toLocalDate(isoOrSpaceDate: string): string {
+  // Health Auto Export uses "YYYY-MM-DD HH:MM:SS" with no timezone. We trust the device's local time.
+  // Extract just the date portion.
+  return isoOrSpaceDate.split(' ')[0].split('T')[0]
+}
+
+function normalizeHAE(metrics: HAEMetric[]): DirectEntry[] {
+  // Aggregate metrics by date.
+  const byDate = new Map<string, DirectEntry>()
+  function get(d: string): DirectEntry {
+    if (!byDate.has(d)) byDate.set(d, { for_date: d, source: 'apple_health' })
+    return byDate.get(d)!
+  }
+
+  for (const metric of metrics) {
+    if (!metric?.data) continue
+    const name = (metric.name || '').toLowerCase()
+    for (const point of metric.data) {
+      const rawDate = point.date || point.startDate
+      if (!rawDate) continue
+      const d = toLocalDate(rawDate)
+      const entry = get(d)
+      const qty = point.qty ?? point.Avg
+
+      if (name.includes('heart_rate_variability') || name === 'hrv' || name.includes('heart rate variability')) {
+        if (qty != null) entry.hrv_rmssd = Number(qty)
+      } else if (name.includes('resting_heart_rate') || name === 'rhr' || name.includes('resting heart rate')) {
+        if (qty != null) entry.rhr_bpm = Math.round(Number(qty))
+      } else if (name === 'sleep_analysis' || name.includes('sleep')) {
+        // Sum sleep duration if startDate/endDate provided
+        if (point.startDate && point.endDate) {
+          const start = new Date(point.startDate.replace(' ', 'T'))
+          const end = new Date(point.endDate.replace(' ', 'T'))
+          const min = Math.round((end.getTime() - start.getTime()) / 60000)
+          if (min > 0 && min < 1440) {
+            entry.sleep_total_min = (entry.sleep_total_min || 0) + min
+          }
+        } else if (qty != null) {
+          // HAE sometimes gives total in hours via qty
+          entry.sleep_total_min = Math.round(Number(qty) * 60)
+        }
+      } else if (name === 'step_count' || name === 'steps') {
+        if (qty != null) entry.steps = (entry.steps || 0) + Math.round(Number(qty))
+      } else if (name === 'active_energy' || name.includes('active energy')) {
+        if (qty != null) entry.active_calories = (entry.active_calories || 0) + Math.round(Number(qty))
+      } else if (name === 'basal_energy_burned' || name.includes('basal energy')) {
+        if (qty != null) entry.total_calories = (entry.total_calories || 0) + Math.round(Number(qty))
+      } else if (name === 'respiratory_rate') {
+        if (qty != null) entry.respiratory_rate = Number(qty)
+      } else if (name === 'blood_oxygen_saturation' || name === 'oxygen_saturation' || name.includes('spo2')) {
+        if (qty != null) entry.spo2_pct = Math.round(Number(qty) * (Number(qty) < 2 ? 100 : 1))
+      } else if (name === 'body_temperature' || name.includes('body temp')) {
+        if (qty != null) entry.body_temp_c = Number(qty)
+      }
+    }
+  }
+
+  return Array.from(byDate.values())
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const token = req.headers.get('x-vitals-token') || new URL(req.url).searchParams.get('token')
+    if (!token) {
+      return NextResponse.json({ error: 'Missing X-Vitals-Token header or ?token= query' }, { status: 401 })
+    }
+
+    const admin = getServiceRoleClient()
+
+    // Look up user by token
+    const { data: tokenRow, error: tokenErr } = await admin
+      .from('import_tokens')
+      .select('user_id')
+      .eq('token', token)
+      .maybeSingle()
+    if (tokenErr || !tokenRow) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+    }
+    const userId = tokenRow.user_id
+
+    const payload = await req.json() as ImportPayload
+
+    let entries: DirectEntry[] = []
+    if (payload.entries && Array.isArray(payload.entries)) {
+      entries = payload.entries
+    } else if (payload.data?.metrics && Array.isArray(payload.data.metrics)) {
+      entries = normalizeHAE(payload.data.metrics)
+    } else {
+      return NextResponse.json({ error: 'Payload must include either "entries" or "data.metrics"' }, { status: 400 })
+    }
+
+    if (entries.length === 0) {
+      return NextResponse.json({ ok: true, imported: 0, message: 'No data in payload' })
+    }
+
+    let imported = 0
+    let failed = 0
+    for (const e of entries) {
+      if (!e.for_date) { failed++; continue }
+      const row = {
+        user_id: userId,
+        for_date: e.for_date,
+        source: (e.source || 'apple_health') as 'apple_health' | 'whoop' | 'oura' | 'fitbit' | 'garmin' | 'manual' | 'other',
+        hrv_rmssd: e.hrv_rmssd ?? null,
+        rhr_bpm: e.rhr_bpm ?? null,
+        sleep_total_min: e.sleep_total_min ?? null,
+        sleep_deep_min: e.sleep_deep_min ?? null,
+        sleep_rem_min: e.sleep_rem_min ?? null,
+        sleep_light_min: e.sleep_light_min ?? null,
+        sleep_awake_min: e.sleep_awake_min ?? null,
+        sleep_efficiency_pct: e.sleep_efficiency_pct ?? null,
+        steps: e.steps ?? null,
+        active_calories: e.active_calories ?? null,
+        total_calories: e.total_calories ?? null,
+        recovery_score: e.recovery_score ?? null,
+        strain_score: e.strain_score ?? null,
+        readiness_score: e.readiness_score ?? null,
+        body_temp_c: e.body_temp_c ?? null,
+        spo2_pct: e.spo2_pct ?? null,
+        respiratory_rate: e.respiratory_rate ?? null,
+        notes: e.notes ?? null,
+      }
+      const { error: upErr } = await admin
+        .from('biometric_entries')
+        .upsert(row, { onConflict: 'user_id,for_date,source' })
+      if (upErr) {
+        console.error('[import-health] upsert failed:', upErr.message, 'row:', row)
+        failed++
+      } else {
+        imported++
+      }
+    }
+
+    // Update token usage stats
+    await admin
+      .from('import_tokens')
+      .update({ last_used_at: new Date().toISOString(), imports_received: tokenRow.imports_received ? undefined : 1 })
+      .eq('user_id', userId)
+    // Increment via separate call since supabase-js doesn't support raw increment in update
+    await admin.rpc('increment_import_token_counter', { p_user_id: userId }).then(() => {}, () => {
+      // RPC may not exist yet — degrade silently. Could add this RPC later.
+    })
+
+    return NextResponse.json({ ok: true, imported, failed, total: entries.length })
+  } catch (err) {
+    console.error('[import-health] error:', err)
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Import failed' }, { status: 500 })
+  }
+}
+
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    endpoint: '/api/import-health',
+    method: 'POST',
+    auth: 'X-Vitals-Token header OR ?token= query param',
+    payload_shapes: ['{ data: { metrics: [...] } }  // Health Auto Export', '{ entries: [{ for_date, hrv_rmssd, rhr_bpm, sleep_total_min, ... }] }'],
+  })
+}
