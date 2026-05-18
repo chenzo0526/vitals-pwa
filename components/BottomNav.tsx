@@ -15,8 +15,9 @@ const TABS = [
 ]
 
 const LOG_OPTIONS = [
+  { href: '/journal', icon: Sparkles, label: 'Check-in', color: 'bg-violet-500/15 border-violet-400/40 text-violet-300' },
   { href: '/food', icon: Camera, label: 'Snap Plate', color: 'bg-amber-500/15 border-amber-400/40 text-amber-300' },
-  { href: '/voice', icon: Mic, label: 'Voice', color: 'bg-violet-500/15 border-violet-400/40 text-violet-300' },
+  { href: '/voice', icon: Mic, label: 'Voice Food', color: 'bg-cyan-500/15 border-cyan-400/40 text-cyan-300' },
   { href: '/label', icon: ScanLine, label: 'Scan Label', color: 'bg-cyan-500/15 border-cyan-400/40 text-cyan-300' },
   { href: '/workout', icon: Dumbbell, label: 'Workout', color: 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300' },
   { href: '/progress', icon: TrendingUp, label: 'Body Check', color: 'bg-rose-500/15 border-rose-400/40 text-rose-300' },

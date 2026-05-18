@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Droplet, Brain, Sliders, CreditCard, Camera, Mic, ScanLine, Dumbbell,
   TrendingUp, History, FileText, Shield, Sparkles, ChevronRight, LogOut, Loader2,
+  Heart,
 } from 'lucide-react'
 import { isTrialing, trialDaysLeft, UserProfile } from '@/lib/tier'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,8 @@ const SECTIONS = [
     title: 'Health intelligence',
     items: [
       { href: '/bloodwork', icon: Droplet, label: 'Bloodwork', desc: 'Upload labs · AI interpretation', accent: 'rose' },
+      { href: '/recovery', icon: Heart, label: 'Recovery', desc: 'HRV · RHR · sleep · readiness', accent: 'rose' },
+      { href: '/journal', icon: Sparkles, label: 'Daily check-in', desc: 'Voice journal · mood/energy/sleep', accent: 'violet' },
       { href: '/rediagnosis', icon: Brain, label: 'Rediagnosis', desc: 'Weekly AI review', accent: 'violet' },
       { href: '/custom-metrics', icon: Sliders, label: 'Custom Metrics', desc: 'Track anything', accent: 'amber' },
     ],
@@ -26,7 +29,7 @@ const SECTIONS = [
     items: [
       { href: '/food', icon: Camera, label: 'Snap Plate', desc: 'Food vision', accent: 'amber' },
       { href: '/label', icon: ScanLine, label: 'Scan Label', desc: 'Nutrition OCR', accent: 'cyan' },
-      { href: '/voice', icon: Mic, label: 'Log Voice', desc: 'Speak to log', accent: 'violet' },
+      { href: '/voice', icon: Mic, label: 'Log Voice', desc: 'Voice food parsing', accent: 'violet' },
       { href: '/workout', icon: Dumbbell, label: 'Lift', desc: 'Sets, reps, RPE', accent: 'green' },
       { href: '/progress', icon: TrendingUp, label: 'Body Check', desc: 'Physique photo', accent: 'rose' },
       { href: '/history', icon: History, label: 'History', desc: 'All logs', accent: 'cyan' },

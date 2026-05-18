@@ -342,6 +342,56 @@ export async function generateCoachInsights(
   return ''
 }
 
+// Daily Check-in parser — takes a free-form voice/text journal entry and structures it.
+// This is the qualitative layer that lets the AI Coach actually understand how the user feels.
+export const DAILY_CHECKIN_PARSE_PROMPT = `You are parsing a daily voice journal from a Vitals user. They just talked into their phone (or typed) about their day — mood, energy, sleep, training, anything on their mind. Your job: extract structured signal from their words.
+
+Rules:
+- DO NOT invent values. If they didn't mention something, leave the field null.
+- For 1-10 scales (mood/energy/focus/sleep_quality/stress/training_quality): infer from their words/tone when they describe how they felt. Use null if they said nothing relevant.
+- gratitude_items, intentions, concerns, wins: short strings, only what they actually said. Empty arrays if they didn't mention any.
+- training_quality: only fill if they mentioned working out. Null otherwise.
+- sleep_hours: only fill if they gave a number or clear estimate.
+- notes: free-form summary of anything else they said that doesn't fit elsewhere — keep their voice, don't editorialize.
+
+Return ONLY valid JSON:
+{
+  "mood": number | null,
+  "energy": number | null,
+  "focus": number | null,
+  "sleep_quality": number | null,
+  "sleep_hours": number | null,
+  "stress_level": number | null,
+  "training_quality": number | null,
+  "gratitude_items": string[],
+  "intentions": string[],
+  "concerns": string[],
+  "wins": string[],
+  "notes": string,
+  "summary": "one sentence capturing the overall tone/state of the entry"
+}`
+
+export async function parseDailyCheckin(
+  transcript: string,
+  model: string = 'claude-sonnet-4-5'
+): Promise<string> {
+  const response = await anthropic.messages.create({
+    model,
+    max_tokens: 1200,
+    temperature: 0.2,
+    system: DAILY_CHECKIN_PARSE_PROMPT,
+    messages: [
+      {
+        role: 'user',
+        content: `Today is ${new Date().toISOString().split('T')[0]}. Parse this daily check-in transcript:\n\n"${transcript}"`,
+      },
+    ],
+  })
+  const content = response.content[0]
+  if (content.type === 'text') return content.text
+  return ''
+}
+
 // Bloodwork Interpreter v2 — the Vitals premium killer feature.
 // Reads a bloodwork panel in the context of the user's stack, training, body comp, prior panels,
 // goals, and lifestyle. Produces a forensic structured interpretation — not the generic
@@ -416,6 +466,28 @@ Return ONLY valid JSON in this shape:
   "suggested_next_labs": [
     "specific marker or panel name — be concrete (e.g., 'SHBG', 'Free T3 + Reverse T3', 'ApoB', 'HCT every 8 weeks')"
   ],
+  "next_lab_recommendations": {
+    "essential": [
+      {
+        "marker": "string — exact marker name as it appears on a Labcorp/Quest order form",
+        "why": "1-2 sentences explaining why this is essential GIVEN this user's stack + last panel + goals",
+        "cadence": "string — how often (e.g., 'every 8 weeks while on TRT', 'annually')"
+      }
+    ],
+    "valuable_additions": [
+      {
+        "marker": "string",
+        "why": "string",
+        "cadence": "string"
+      }
+    ],
+    "skip_for_now": [
+      {
+        "marker": "string",
+        "reason": "string explaining why this can be skipped"
+      }
+    ]
+  },
   "lifestyle_dials": [
     {
       "intervention": "string",
@@ -430,6 +502,8 @@ Return ONLY valid JSON in this shape:
 }
 
 Produce 3-7 hot_spots (only the most relevant — don't list normal markers). 0-N trends (only if prior panels). 0-N stack_interactions (only if there are actual interactions). 3-6 suggested_next_labs. 2-4 lifestyle_dials.
+
+For next_lab_recommendations: 3-6 essential markers (the absolute musts given the user's protocol + last panel), 2-5 valuable_additions (worth the extra cost), 0-3 skip_for_now (markers from the last panel that don't need re-checking in the same window). Use EXACT marker names as they'd appear on a Labcorp or Quest order form — the user will copy this list into an order request.
 
 If there's no prior panel for trends, return an empty trends array. If the user has no active stack, return an empty stack_interactions array. Always produce a meaningful headline + overall_read + hot_spots regardless.`
 

@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
     // Life events from last 180 days OR currently ongoing — fed into Coach context so
     // it can read training/sleep/mood patterns through the lens of what's happening in the user's life.
     const oneEightyDaysAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const sevenDaysAgoLocal = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', { timeZone: tz })
 
     const [
       onboardingRes,
@@ -82,6 +83,8 @@ export async function GET(req: NextRequest) {
       latestPhysiqueRes,
       dailySummaryTodayRes,
       lifeEventsRes,
+      recentCheckinsRes,
+      recentBiometricsRes,
     ] = await Promise.all([
       supabase.from('onboarding_progress').select('identity_data, rhythm_data, first_goal, thirty_day_checkpoint').eq('user_id', userId).maybeSingle(),
       supabase.from('substances').select('*').eq('user_id', userId).eq('active', true),
@@ -99,6 +102,22 @@ export async function GET(req: NextRequest) {
         .or(`ended_on.is.null,ended_on.gte.${oneEightyDaysAgo}`)
         .order('started_on', { ascending: false })
         .limit(20),
+      // Daily check-ins from the last 7 days — qualitative layer the Coach uses heavily
+      supabase
+        .from('daily_checkins')
+        .select('for_date, mood, energy, focus, sleep_quality, sleep_hours, stress_level, training_quality, gratitude_items, intentions, concerns, wins, notes')
+        .eq('user_id', userId)
+        .gte('for_date', sevenDaysAgoLocal)
+        .order('for_date', { ascending: false })
+        .limit(7),
+      // Biometric entries from the last 7 days (HRV, RHR, sleep, recovery score)
+      supabase
+        .from('biometric_entries')
+        .select('for_date, source, hrv_rmssd, rhr_bpm, sleep_total_min, sleep_efficiency_pct, recovery_score, strain_score, readiness_score, notes')
+        .eq('user_id', userId)
+        .gte('for_date', sevenDaysAgoLocal)
+        .order('for_date', { ascending: false })
+        .limit(7),
     ])
 
     const identity = (onboardingRes.data?.identity_data || {}) as Record<string, unknown>
@@ -181,6 +200,11 @@ export async function GET(req: NextRequest) {
       // CRITICAL CONTEXT: what's happening in the user's life right now and recently.
       // Read training/sleep/mood/recovery patterns THROUGH this lens, not in isolation.
       life_events_recent_or_ongoing: lifeEventsRes.data || [],
+      // Qualitative state: daily check-ins from the last 7 days (mood/energy/sleep/stress/training/gratitude/concerns)
+      // The Coach should LEAN ON THIS — it's the most current human-reported truth.
+      daily_checkins_last_7d: recentCheckinsRes.data || [],
+      // Biometric data — HRV, RHR, sleep stages, recovery scores. Watch HRV drops + RHR rises = overtraining/stress.
+      biometrics_last_7d: recentBiometricsRes.data || [],
     }
 
     const rawResponse = await generateCoachInsights(JSON.stringify(context, null, 2))
