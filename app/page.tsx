@@ -12,7 +12,8 @@ import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 import { Skeleton, SkeletonCard } from '@/components/Skeleton'
 import CoachInsightCard from '@/components/CoachInsightCard'
-import { computeCalorieTarget, CalorieGoal, CalorieTargetResult } from '@/lib/calorieTarget'
+import { computeCalorieTarget } from '@/lib/calorieTarget'
+import type { CalorieGoal, CalorieTargetResult } from '@/lib/calorieTarget'
 
 const DEFAULT_GOALS = { calories: 2400, protein_g: 180, carbs_g: 250, fat_g: 80, water_ml: 3000 }
 

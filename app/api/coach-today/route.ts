@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { generateCoachInsights } from '@/lib/claude'
-import { computeCalorieTarget, CalorieGoal } from '@/lib/calorieTarget'
+import { computeCalorieTarget } from '@/lib/calorieTarget'
+import type { CalorieGoal } from '@/lib/calorieTarget'
 
 function inferCalorieGoalFromText(text: string | null | undefined): CalorieGoal {
   if (!text) return 'maintain'
