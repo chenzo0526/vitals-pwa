@@ -13,21 +13,22 @@ import {
   AlertTriangle, Check, RefreshCw, History, Trophy, Target, Activity,
 } from 'lucide-react'
 
-// Minimal type for the Web Speech API since TypeScript's lib.dom doesn't include it by default
-type SpeechRecognitionEvent = {
+// Minimal local types for the Web Speech API. Named with VJ prefix to avoid collision
+// with anything lib.dom might or might not have.
+type VJRecognitionEvent = {
   resultIndex: number
   results: ArrayLike<{
     isFinal: boolean
     0: { transcript: string }
   }>
 }
-type SpeechRecognition = {
+type VJRecognizer = {
   continuous: boolean
   interimResults: boolean
   lang: string
   start: () => void
   stop: () => void
-  onresult: ((e: SpeechRecognitionEvent) => void) | null
+  onresult: ((e: VJRecognitionEvent) => void) | null
   onerror: ((e: { error: string }) => void) | null
   onend: (() => void) | null
 }
@@ -71,12 +72,13 @@ export default function JournalPage() {
   const [history, setHistory] = useState<Checkin[]>([])
   const [prompt] = useState(() => PROMPTS[Math.floor(Math.random() * PROMPTS.length)])
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<VJRecognizer | null>(null)
 
   // Detect browser support + load today's existing check-in
   useEffect(() => {
-    // @ts-expect-error — Web Speech API is not in lib.dom but exists in Chrome/Safari
-    const SpeechRec = (typeof window !== 'undefined') ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null
+    // Web Speech API isn't reliably typed in lib.dom; use `any` window for vendor prefix detection.
+    const win = (typeof window !== 'undefined' ? window : null) as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown } | null
+    const SpeechRec = win?.SpeechRecognition || win?.webkitSpeechRecognition || null
     setSupported(!!SpeechRec)
     loadToday()
   }, [])
@@ -113,14 +115,14 @@ export default function JournalPage() {
       setError('Voice input is not available on this browser. You can type instead.')
       return
     }
-    // @ts-expect-error — Web Speech API
-    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRec) return
-    const rec: SpeechRecognition = new SpeechRec()
+    const win2 = window as unknown as { SpeechRecognition?: new () => VJRecognizer; webkitSpeechRecognition?: new () => VJRecognizer }
+    const SpeechRecCtor = win2.SpeechRecognition || win2.webkitSpeechRecognition
+    if (!SpeechRecCtor) return
+    const rec: VJRecognizer = new SpeechRecCtor()
     rec.continuous = true
     rec.interimResults = true
     rec.lang = 'en-US'
-    rec.onresult = (e: SpeechRecognitionEvent) => {
+    rec.onresult = (e: VJRecognitionEvent) => {
       let finalText = ''
       let interimText = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {

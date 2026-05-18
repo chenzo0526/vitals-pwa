@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Heart, Activity, Moon, Loader2, ChevronLeft, AlertTriangle, Check, RefreshCw, History,
-  Watch, Plus, Trash2, Edit3, TrendingUp, TrendingDown, Smartphone, Copy, ClipboardCheck, Eye, EyeOff,
+  Plus, Trash2, Edit3, TrendingUp, TrendingDown, Smartphone, Copy, ClipboardCheck, Eye, EyeOff,
 } from 'lucide-react'
 
 type BiometricEntry = {

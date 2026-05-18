@@ -207,15 +207,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Update token usage stats
+    // Update token last-used timestamp. (Increment counter is best-effort; supabase-js can't do raw increment in a single update,
+    // so we just bump last_used_at here and skip the counter — non-critical.)
     await admin
       .from('import_tokens')
-      .update({ last_used_at: new Date().toISOString(), imports_received: tokenRow.imports_received ? undefined : 1 })
+      .update({ last_used_at: new Date().toISOString() })
       .eq('user_id', userId)
-    // Increment via separate call since supabase-js doesn't support raw increment in update
-    await admin.rpc('increment_import_token_counter', { p_user_id: userId }).then(() => {}, () => {
-      // RPC may not exist yet — degrade silently. Could add this RPC later.
-    })
 
     return NextResponse.json({ ok: true, imported, failed, total: entries.length })
   } catch (err) {
