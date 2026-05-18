@@ -41,7 +41,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} antialiased`}>
         <ToastProvider>
-          <main className="max-w-md mx-auto pb-24 min-h-screen">
+          <main className="max-w-md mx-auto pb-32 min-h-screen">
             {children}
           </main>
           <BottomNav />

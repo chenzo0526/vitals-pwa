@@ -108,7 +108,7 @@ export default function BottomNav() {
         )}
       </AnimatePresence>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-black/85 backdrop-blur-md safe-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/95 backdrop-blur-xl safe-bottom">
         <div className="max-w-md mx-auto relative flex items-center justify-around px-1 py-2">
           {TABS.slice(0, 2).map((t) => <Tab key={t.href} {...t} active={isActive(pathname, t.href)} />)}
 

@@ -120,14 +120,26 @@ function LoginInner() {
       // Hard-refresh after navigation so middleware re-reads the session cookie.
       router.refresh()
     } catch (e) {
+      // Surface the RAW error from Supabase so we can actually diagnose. Plus a friendly hint.
       const raw = e instanceof Error ? e.message : 'Invalid or expired code.'
-      const friendly = /expired|invalid/i.test(raw)
-        ? 'That code didn\'t work. iOS may have autofilled an old code — tap Resend, then paste the newest one from your email.'
-        : raw
-      setError(friendly)
+      // Log to console for any dev tools the user has open
+      console.error('[verify] Supabase OTP error:', raw, 'token length:', token.length, 'first/last digits:', token[0], token[token.length - 1])
+      const isExpiry = /expired/i.test(raw)
+      const isInvalid = /invalid/i.test(raw)
+      const isTooManyRequests = /too many|rate/i.test(raw)
+      let hint = ''
+      if (isExpiry) hint = 'Code expired — tap Resend, then paste the newest code immediately.'
+      else if (isInvalid) hint = 'Code was rejected. iOS may have autofilled an OLD code. Tap Resend → wait 5 seconds → manually copy the NEWEST email\'s code → paste here. Codes are 7 digits.'
+      else if (isTooManyRequests) hint = 'Too many requests. Wait 30 seconds, then try Resend.'
+      // Show BOTH the raw error AND the hint so we can debug AND so user gets actionable advice
+      setError(hint ? `${hint}\n\n[debug: ${raw}]` : `${raw}\n\nTap Resend and try the newest code.`)
       // Clear the input so iOS doesn't keep re-pasting the same stale code on the next keystroke.
       setCode('')
       autoSubmittedRef.current = false
+      if (autoSubmitTimerRef.current) {
+        clearTimeout(autoSubmitTimerRef.current)
+        autoSubmitTimerRef.current = null
+      }
       // Allow immediate resend on failure — no point making them wait 60s when the code is dead.
       setResendIn(0)
       setVerifying(false)
@@ -294,7 +306,7 @@ function LoginInner() {
                   {error && (
                     <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded-md p-2 flex items-start gap-1.5">
                       <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-                      <span>{error}</span>
+                      <span className="whitespace-pre-line leading-relaxed">{error}</span>
                     </div>
                   )}
 
