@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle, Calendar, Dumbbell, Plus, Loader2 } from 'lucide-react'
+import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle, Calendar, Dumbbell, Plus, Loader2, Info, X } from 'lucide-react'
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 import { Skeleton, SkeletonCard } from '@/components/Skeleton'
@@ -54,6 +54,7 @@ export default function HomePage() {
   const [baseline, setBaseline] = useState<BaselineStatus>({ hasPhysique: false, hasSubstances: false, hasBloodwork: false })
   const [addingWater, setAddingWater] = useState<number | null>(null)  // ml of pending add for the spinner
   const [calTarget, setCalTarget] = useState<CalorieTargetResult | null>(null)
+  const [showCalMath, setShowCalMath] = useState(false)
 
   useEffect(() => {
     async function fetchAll() {
@@ -422,20 +423,29 @@ export default function HomePage() {
                   <span className="text-sm text-white/40 font-normal ml-1">/ {goals.calories.toLocaleString()} kcal</span>
                 </p>
                 {calTarget && (
-                  <p className="text-[10px] text-white/40 mt-0.5 leading-tight">
+                  <div className="text-[10px] text-white/40 mt-0.5 leading-tight flex items-center gap-1.5 flex-wrap">
                     {calTarget.is_complete ? (
                       <>
-                        TDEE {calTarget.tdee.toLocaleString()} kcal
-                        {calTarget.delta !== 0 && (
-                          <span className={calTarget.delta < 0 ? 'text-rose-300' : 'text-emerald-300'}>
-                            {' '}· {calTarget.delta < 0 ? '' : '+'}{calTarget.delta} kcal goal
-                          </span>
-                        )}
+                        <span>
+                          TDEE {calTarget.tdee.toLocaleString()} kcal
+                          {calTarget.delta !== 0 && (
+                            <span className={calTarget.delta < 0 ? 'text-rose-300' : 'text-emerald-300'}>
+                              {' '}· {calTarget.delta < 0 ? '' : '+'}{calTarget.delta} kcal goal
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowCalMath(true) }}
+                          className="inline-flex items-center gap-0.5 text-amber-300/70 hover:text-amber-200 underline decoration-dotted underline-offset-2"
+                          aria-label="Show calorie math"
+                        >
+                          <Info size={10} /> Why?
+                        </button>
                       </>
                     ) : (
                       <span className="text-amber-300/70">Add age/height/weight in profile for personalized target</span>
                     )}
-                  </p>
+                  </div>
                 )}
               </div>
               <Zap size={32} className="text-amber-400/30" />
@@ -541,6 +551,109 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+
+      {/* Why this calorie number? — math transparency modal */}
+      {showCalMath && calTarget && calTarget.is_complete && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-3"
+          onClick={() => setShowCalMath(false)}
+        >
+          <motion.div
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-zinc-950 border border-amber-400/20 rounded-2xl p-4 space-y-3 max-h-[85vh] overflow-y-auto safe-bottom"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-bold text-white">Where this number comes from</p>
+                <p className="text-[10px] text-white/40">Mifflin-St Jeor BMR × activity × your stated goal.</p>
+              </div>
+              <button
+                onClick={() => setShowCalMath(false)}
+                className="text-white/40 hover:text-white/80 p-1.5 rounded-md hover:bg-white/5 flex-shrink-0"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2 text-[12px]">
+              <div className="flex items-center justify-between">
+                <span className="text-white/60">BMR (resting burn)</span>
+                <span className="text-white font-mono tabular-nums">{calTarget.bmr.toLocaleString()} kcal</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-white/60">Activity multiplier</span>
+                <span className="text-white font-mono tabular-nums">
+                  ×{' '}
+                  {calTarget.activity_level === 'sedentary' && '1.20 (sedentary)'}
+                  {calTarget.activity_level === 'light' && '1.375 (light)'}
+                  {calTarget.activity_level === 'moderate' && '1.55 (moderate)'}
+                  {calTarget.activity_level === 'active' && '1.725 (active)'}
+                  {calTarget.activity_level === 'very_active' && '1.90 (very active)'}
+                </span>
+              </div>
+              <div className="border-t border-white/10 pt-2 flex items-center justify-between">
+                <span className="text-white/60">= TDEE (maintain)</span>
+                <span className="text-amber-300 font-mono tabular-nums font-bold">{calTarget.tdee.toLocaleString()} kcal</span>
+              </div>
+              {calTarget.delta !== 0 && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/60">Goal delta</span>
+                    <span className={`font-mono tabular-nums ${calTarget.delta < 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                      {calTarget.delta > 0 ? '+' : ''}{calTarget.delta} kcal/day
+                    </span>
+                  </div>
+                  <div className="border-t border-white/10 pt-2 flex items-center justify-between">
+                    <span className="text-white/60 font-bold">= Daily target</span>
+                    <span className="text-amber-400 font-mono tabular-nums font-bold text-base">{calTarget.target.toLocaleString()} kcal</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5 space-y-1">
+              <p className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Macro targets</p>
+              <div className="grid grid-cols-3 gap-2 text-[11px]">
+                <div>
+                  <p className="text-rose-300 font-mono tabular-nums font-bold">{calTarget.protein_g_target}g</p>
+                  <p className="text-[9px] text-white/40 uppercase tracking-wider">Protein</p>
+                </div>
+                <div>
+                  <p className="text-amber-300 font-mono tabular-nums font-bold">{calTarget.carbs_g_target}g</p>
+                  <p className="text-[9px] text-white/40 uppercase tracking-wider">Carbs</p>
+                </div>
+                <div>
+                  <p className="text-cyan-300 font-mono tabular-nums font-bold">{calTarget.fat_g_target}g</p>
+                  <p className="text-[9px] text-white/40 uppercase tracking-wider">Fat</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-[10px] text-white/50 space-y-1.5 leading-relaxed">
+              <p>
+                <span className="font-bold text-white/70">Activity tier</span> is auto-set from your weekly training days in onboarding. Edit it in your profile if it feels off.
+              </p>
+              <p>
+                <span className="font-bold text-white/70">Heads up:</span> this is a baseline estimate. It does not yet pull from your wearable (Whoop / Apple Watch / Garmin) — once that&apos;s wired in, the number adapts to actual daily burn instead of an activity bucket.
+              </p>
+              <p>
+                <span className="font-bold text-white/70">If your weight isn&apos;t moving:</span> trust the trend over the number. ±100 kcal across a couple weeks beats chasing daily accuracy.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowCalMath(false)}
+              className="w-full py-2.5 rounded-lg bg-amber-400/15 border border-amber-400/40 text-amber-200 text-xs uppercase tracking-wider font-bold hover:bg-amber-400/25"
+            >
+              Got it
+            </button>
+          </motion.div>
+        </div>
+      )}
     </div>
   )
 }
