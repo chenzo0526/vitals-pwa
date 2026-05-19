@@ -66,7 +66,7 @@ export default function HomePage() {
 
         const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
         const nowIso = new Date().toISOString()
-        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, onboardingDataRes] = await Promise.all([
+        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, onboardingDataRes, biometricsRes] = await Promise.all([
           supabase.from('daily_summary').select('*').eq('date', dateStr).maybeSingle(),
           uid
             ? supabase.from('user_profile').select('*').eq('id', uid).maybeSingle()
@@ -108,6 +108,9 @@ export default function HomePage() {
           uid
             ? supabase.from('onboarding_progress').select('identity_data, rhythm_data, first_goal').eq('user_id', uid).maybeSingle()
             : Promise.resolve({ data: null }),
+          uid
+            ? supabase.from('biometric_entries').select('total_calories, for_date').eq('user_id', uid).not('total_calories', 'is', null).gte('for_date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)).order('for_date', { ascending: false }).limit(7)
+            : Promise.resolve({ data: null }),
         ])
 
         if (uid && profileRes.data) {
@@ -142,6 +145,18 @@ export default function HomePage() {
         const identity = (onboardingDataRes.data?.identity_data || {}) as Record<string, unknown>
         const rhythm = (onboardingDataRes.data?.rhythm_data || {}) as Record<string, unknown>
         const inferredGoal = inferCalorieGoalFromText(onboardingDataRes.data?.first_goal ?? null)
+        // Roll up wearable TDEE from last 7 days of total_calories when available.
+        // Skip today's row if it's the only one (incomplete day) — prefer yesterday + earlier.
+        const biometricRows = ((biometricsRes as { data?: Array<{ total_calories: number | null; for_date: string }> | null })?.data) || []
+        let wearableTdee: number | null = null
+        if (biometricRows.length > 0) {
+          const todayStr = new Date().toISOString().slice(0, 10)
+          const eligible = biometricRows.filter((r) => r.total_calories && r.total_calories > 800 && r.for_date !== todayStr)
+          if (eligible.length >= 1) {
+            const sum = eligible.reduce((a, r) => a + (r.total_calories || 0), 0)
+            wearableTdee = Math.round(sum / eligible.length)
+          }
+        }
         const target = computeCalorieTarget({
           age: identity.age ? Number(identity.age) : null,
           sex: 'male',
@@ -149,6 +164,7 @@ export default function HomePage() {
           height_cm: identity.height_cm ? Number(identity.height_cm) : null,
           training_days_per_week: rhythm.training_days_per_week ? Number(rhythm.training_days_per_week) : null,
           goal: inferredGoal,
+          wearable_tdee_kcal: wearableTdee,
         })
         setCalTarget(target)
       } finally {
@@ -445,6 +461,11 @@ export default function HomePage() {
                       <>
                         <span>
                           TDEE {calTarget.tdee.toLocaleString()} kcal
+                          {calTarget.tdee_source === 'wearable' && (
+                            <span className="ml-1 px-1 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[8px] uppercase tracking-wider font-bold align-middle">
+                              from wearable
+                            </span>
+                          )}
                           {calTarget.delta !== 0 && (
                             <span className={calTarget.delta < 0 ? 'text-rose-300' : 'text-emerald-300'}>
                               {' '}· {calTarget.delta < 0 ? '' : '+'}{calTarget.delta} kcal goal
@@ -597,25 +618,46 @@ export default function HomePage() {
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2 text-[12px]">
-              <div className="flex items-center justify-between">
-                <span className="text-white/60">BMR (resting burn)</span>
-                <span className="text-white font-mono tabular-nums">{calTarget.bmr.toLocaleString()} kcal</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-white/60">Activity multiplier</span>
-                <span className="text-white font-mono tabular-nums">
-                  ×{' '}
-                  {calTarget.activity_level === 'sedentary' && '1.20 (sedentary)'}
-                  {calTarget.activity_level === 'light' && '1.375 (light)'}
-                  {calTarget.activity_level === 'moderate' && '1.55 (moderate)'}
-                  {calTarget.activity_level === 'active' && '1.725 (active)'}
-                  {calTarget.activity_level === 'very_active' && '1.90 (very active)'}
-                </span>
-              </div>
-              <div className="border-t border-white/10 pt-2 flex items-center justify-between">
-                <span className="text-white/60">= TDEE (maintain)</span>
-                <span className="text-amber-300 font-mono tabular-nums font-bold">{calTarget.tdee.toLocaleString()} kcal</span>
-              </div>
+              {calTarget.tdee_source === 'wearable' ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/60">Source</span>
+                    <span className="text-emerald-300 font-mono tabular-nums inline-flex items-center gap-1">
+                      Apple Watch · 7-day avg
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/60">BMR (reference)</span>
+                    <span className="text-white/60 font-mono tabular-nums">{calTarget.bmr.toLocaleString()} kcal</span>
+                  </div>
+                  <div className="border-t border-white/10 pt-2 flex items-center justify-between">
+                    <span className="text-white/60">= TDEE (measured)</span>
+                    <span className="text-emerald-300 font-mono tabular-nums font-bold">{calTarget.tdee.toLocaleString()} kcal</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/60">BMR (resting burn)</span>
+                    <span className="text-white font-mono tabular-nums">{calTarget.bmr.toLocaleString()} kcal</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/60">Activity multiplier</span>
+                    <span className="text-white font-mono tabular-nums">
+                      ×{' '}
+                      {calTarget.activity_level === 'sedentary' && '1.20 (sedentary)'}
+                      {calTarget.activity_level === 'light' && '1.375 (light)'}
+                      {calTarget.activity_level === 'moderate' && '1.55 (moderate)'}
+                      {calTarget.activity_level === 'active' && '1.725 (active)'}
+                      {calTarget.activity_level === 'very_active' && '1.90 (very active)'}
+                    </span>
+                  </div>
+                  <div className="border-t border-white/10 pt-2 flex items-center justify-between">
+                    <span className="text-white/60">= TDEE (estimated)</span>
+                    <span className="text-amber-300 font-mono tabular-nums font-bold">{calTarget.tdee.toLocaleString()} kcal</span>
+                  </div>
+                </>
+              )}
               {calTarget.delta !== 0 && (
                 <>
                   <div className="flex items-center justify-between">
@@ -655,7 +697,15 @@ export default function HomePage() {
                 <span className="font-bold text-white/70">Activity tier</span> is auto-set from your weekly training days in onboarding. Edit it in your profile if it feels off.
               </p>
               <p>
-                <span className="font-bold text-white/70">Heads up:</span> this is a baseline estimate. It does not yet pull from your wearable (Whoop / Apple Watch / Garmin) — once that&apos;s wired in, the number adapts to actual daily burn instead of an activity bucket.
+                {calTarget.tdee_source === 'wearable' ? (
+                  <>
+                    <span className="font-bold text-emerald-300">Live read:</span> pulling actual daily burn from your Apple Watch via Health Auto Export. This adapts as your training load shifts — no need to manually edit activity level.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-bold text-white/70">Heads up:</span> this is a baseline estimate. Once Health Auto Export starts pushing your daily total calories, the number switches to live wearable data automatically.
+                  </>
+                )}
               </p>
               <p>
                 <span className="font-bold text-white/70">If your weight isn&apos;t moving:</span> trust the trend over the number. ±100 kcal across a couple weeks beats chasing daily accuracy.

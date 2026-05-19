@@ -12,6 +12,8 @@ export type CalorieTargetInputs = {
   height_cm: number | null
   training_days_per_week: number | null
   goal: CalorieGoal
+  /** Optional: rolling 7-day avg of total_calories from wearable (Apple Watch / Whoop). Overrides activity-multiplier TDEE when present. */
+  wearable_tdee_kcal?: number | null
 }
 
 export type CalorieTargetResult = {
@@ -25,6 +27,8 @@ export type CalorieTargetResult = {
   rationale: string
   activity_level: ActivityLevel
   is_complete: boolean
+  /** Where the TDEE came from. 'wearable' = real Apple Watch / Whoop average. 'formula' = BMR × activity multiplier. */
+  tdee_source: 'wearable' | 'formula'
 }
 
 const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
@@ -69,6 +73,7 @@ export function computeCalorieTarget(input: CalorieTargetInputs): CalorieTargetR
       rationale: 'Default target — add age/height/weight in profile for a personalized number.',
       activity_level: 'moderate',
       is_complete: false,
+      tdee_source: 'formula',
     }
   }
 
@@ -77,7 +82,13 @@ export function computeCalorieTarget(input: CalorieTargetInputs): CalorieTargetR
   const bmr = sex === 'male' ? baseBmr + 5 : baseBmr - 161
 
   const activity = activityFromTrainingDays(training_days_per_week)
-  const tdee = bmr * ACTIVITY_MULTIPLIERS[activity]
+  const formulaTDEE = bmr * ACTIVITY_MULTIPLIERS[activity]
+  // If we have a real wearable-measured TDEE (and it's in a plausible band), use it.
+  // Otherwise fall back to BMR × activity multiplier.
+  const wearable = input.wearable_tdee_kcal
+  const usingWearable = !!wearable && wearable >= bmr * 1.0 && wearable <= bmr * 3.0
+  const tdee = usingWearable ? wearable! : formulaTDEE
+  const tdeeSource: 'wearable' | 'formula' = usingWearable ? 'wearable' : 'formula'
   const delta = GOAL_DELTA[goal]
   const target = Math.round(tdee + delta)
 
@@ -115,8 +126,11 @@ export function computeCalorieTarget(input: CalorieTargetInputs): CalorieTargetR
     protein_g_target,
     carbs_g_target,
     fat_g_target,
-    rationale: `BMR ${Math.round(bmr)} × ${ACTIVITY_MULTIPLIERS[activity]} (${activity.replace('_', ' ')}) = ${Math.round(tdee)} kcal TDEE. ${goalLabel[goal]} = ${target} kcal/day target.`,
+    rationale: usingWearable
+      ? `Wearable 7-day avg = ${Math.round(tdee)} kcal TDEE. ${goalLabel[goal]} = ${target} kcal/day target.`
+      : `BMR ${Math.round(bmr)} × ${ACTIVITY_MULTIPLIERS[activity]} (${activity.replace('_', ' ')}) = ${Math.round(tdee)} kcal TDEE. ${goalLabel[goal]} = ${target} kcal/day target.`,
     activity_level: activity,
     is_complete: true,
+    tdee_source: tdeeSource,
   }
 }

@@ -40,6 +40,17 @@ const URGENCY_PULSE: Record<Insight['urgency'], string> = {
   low: 'opacity-95',
 }
 
+
+// Fallback topic_key when Claude didn't tag the insight (legacy cached insights from before
+// the snooze feature shipped). Stable slug of the title so re-runs hit the same row.
+function slugifyTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'untitled-insight'
+}
+
 export default function CoachInsightCard() {
   const [data, setData] = useState<CoachResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -56,7 +67,7 @@ export default function CoachInsightCard() {
       const res = await fetch('/api/coach-dismiss', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_key: topicKey, topic_title: topicTitle, days: 14 }),
+        body: JSON.stringify({ topic_key: topicKey, topic_title: topicTitle, days: 7 }),
       })
       if (res.ok) {
         setSnoozed((s) => new Set(s).add(topicKey))
@@ -160,6 +171,7 @@ export default function CoachInsightCard() {
               const meta = TYPE_META[ins.type] || TYPE_META.general
               const Icon = meta.icon
               const isOpen = expanded === i
+              const topicKey = ins.topic_key || slugifyTitle(ins.title)
               return (
                 <button
                   key={i}
@@ -200,32 +212,30 @@ export default function CoachInsightCard() {
                                 ))}
                               </div>
                             )}
-                            {ins.topic_key && (
-                              <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-end">
-                                {snoozed.has(ins.topic_key) ? (
-                                  <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-300 inline-flex items-center gap-1">
-                                    <Check size={11} /> Got it — paused 14 days
-                                  </span>
-                                ) : (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      snoozeTopic(ins.topic_key!, ins.title)
-                                    }}
-                                    disabled={snoozing === ins.topic_key}
-                                    className="text-[10px] uppercase tracking-wider font-bold text-white/40 hover:text-white/80 disabled:opacity-50 inline-flex items-center gap-1 px-1.5 py-1 rounded hover:bg-white/5"
-                                    aria-label="Got it — stop showing this for 14 days"
-                                  >
-                                    {snoozing === ins.topic_key ? (
-                                      <Loader2 size={11} className="animate-spin" />
-                                    ) : (
-                                      <BellOff size={11} />
-                                    )}
-                                    Got it — pause 14d
-                                  </button>
-                                )}
-                              </div>
-                            )}
+                            <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-end">
+                              {snoozed.has(topicKey) ? (
+                                <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-300 inline-flex items-center gap-1">
+                                  <Check size={11} /> Got it — paused 7 days
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    snoozeTopic(topicKey, ins.title)
+                                  }}
+                                  disabled={snoozing === topicKey}
+                                  className="text-[10px] uppercase tracking-wider font-bold text-white/40 hover:text-white/80 disabled:opacity-50 inline-flex items-center gap-1 px-1.5 py-1 rounded hover:bg-white/5"
+                                  aria-label="Got it — stop showing this for 7 days"
+                                >
+                                  {snoozing === topicKey ? (
+                                    <Loader2 size={11} className="animate-spin" />
+                                  ) : (
+                                    <BellOff size={11} />
+                                  )}
+                                  Got it — pause 7d
+                                </button>
+                              )}
+                            </div>
                           </motion.div>
                         )}
                       </AnimatePresence>

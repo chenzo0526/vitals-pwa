@@ -23,7 +23,7 @@ async function getSupabase() {
   )
 }
 
-// Snooze a coach insight topic for N days (default 14). Upserts on (user_id, topic_key).
+// Snooze a coach insight topic for N days (default 7). Upserts on (user_id, topic_key).
 export async function POST(req: Request) {
   try {
     const supabase = await getSupabase()
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}))
     const topicKey = typeof body?.topic_key === 'string' ? body.topic_key.trim().slice(0, 80) : ''
     const topicTitle = typeof body?.topic_title === 'string' ? body.topic_title.trim().slice(0, 200) : ''
-    const days = Math.max(1, Math.min(60, Number(body?.days) || 14))
+    const days = Math.max(1, Math.min(60, Number(body?.days) || 7))
 
     if (!topicKey) {
       return NextResponse.json({ error: 'topic_key required' }, { status: 400 })
