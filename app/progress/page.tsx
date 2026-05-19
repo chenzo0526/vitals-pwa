@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { supabase, getCurrentUserId } from '@/lib/supabase'
 import { compressImage } from '@/lib/images'
+import { celebrate } from '@/lib/celebrate'
 
 type PhysiqueAnalysis = {
   estimated_bf_percent: number
@@ -227,6 +228,7 @@ export default function ProgressPage() {
       })
       if (insErr) throw new Error(insErr.message)
       setSaved(true)
+      celebrate.baseline()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
     } finally {

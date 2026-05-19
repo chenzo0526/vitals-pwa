@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabase'
+import { celebrate } from '@/lib/celebrate'
 import ExercisePicker from '@/components/ExercisePicker'
 
 type SessionRow = {
@@ -190,6 +191,31 @@ function ActiveWorkoutInner() {
       const { data, error: insertErr } = await supabase.from('workout_sets').insert([row]).select()
       if (insertErr) throw new Error(insertErr.message)
       if (data) setAllSets((prev) => [...prev, ...(data as SetRow[])])
+      // PR detection: did this weight beat the user's previous max for this exercise?
+      const newWeight = d.weight_lb ? Number(d.weight_lb) : 0
+      if (newWeight > 0) {
+        try {
+          const { data: priorMax } = await supabase
+            .from('workout_sets')
+            .select('weight_lb')
+            .eq('user_id', user.id)
+            .eq('exercise_name', name)
+            .neq('session_id', sessionId) // ignore this session's earlier sets
+            .order('weight_lb', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          const prevBest = priorMax?.weight_lb ?? 0
+          if (newWeight > prevBest && prevBest > 0) {
+            celebrate.pr()
+          } else {
+            celebrate.lift()
+          }
+        } catch {
+          celebrate.lift()
+        }
+      } else {
+        celebrate.lift()
+      }
       // Remove this draft row + keep weight as prefill for the next set
       setDraftSets((prev) => {
         const remaining = prev.filter((_, i) => i !== idx)
@@ -693,6 +719,7 @@ function EndSessionDialog({
         })
         .eq('id', sessionId)
       if (updErr) throw new Error(updErr.message)
+      celebrate.lift()
       onFinished()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed')

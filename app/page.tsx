@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress'
 import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle, Calendar, Dumbbell, Plus, Loader2, Info, X } from 'lucide-react'
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
+import { celebrate } from '@/lib/celebrate'
 import { Skeleton, SkeletonCard } from '@/components/Skeleton'
 import CoachInsightCard from '@/components/CoachInsightCard'
 import { computeCalorieTarget } from '@/lib/calorieTarget'
@@ -213,6 +214,22 @@ export default function HomePage() {
 
   const caloriesRemaining = goals.calories - today.calories_total
   const caloriesPctOfTarget = goals.calories > 0 ? (today.calories_total / goals.calories) * 100 : 0
+
+  // Fire a one-shot goal-hit burst the first time today crosses 95% of calorie target.
+  // Uses localStorage so it only triggers once per local date.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (loading) return
+    if (goals.calories <= 0) return
+    if (caloriesPctOfTarget < 95) return
+    const todayKey = getLocalDateString(new Date(), getUserTimezone())
+    const flagKey = `vitals:goal-hit:${todayKey}`
+    try {
+      if (localStorage.getItem(flagKey)) return
+      localStorage.setItem(flagKey, '1')
+      celebrate.goal()
+    } catch { /* private mode — skip */ }
+  }, [loading, goals.calories, caloriesPctOfTarget])
 
   const baselineDone = baseline.hasPhysique && baseline.hasSubstances && baseline.hasBloodwork
   // Don't render checklist until baseline status is loaded — otherwise it flashes

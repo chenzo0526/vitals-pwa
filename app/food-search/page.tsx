@@ -11,6 +11,7 @@ import {
   Search, ChevronLeft, Loader2, Check, Plus, Minus, X, AlertTriangle, Flame, Beef, Wheat, Droplet,
 } from 'lucide-react'
 import { useToast } from '@/components/Toast'
+import { celebrate } from '@/lib/celebrate'
 
 type FoodResult = {
   fdc_id: number
@@ -92,7 +93,8 @@ export default function FoodSearchPage() {
       })
       if (insErr) throw new Error(insErr.message)
       toast({ kind: 'success', title: 'Logged', text: selected.name })
-      setTimeout(() => router.push('/'), 700)
+      celebrate.food()
+      setTimeout(() => router.push('/'), 900)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Log failed')
     } finally {

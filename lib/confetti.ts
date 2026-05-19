@@ -1,18 +1,11 @@
 'use client'
 
-import confetti from 'canvas-confetti'
+// Legacy entrypoint — kept for backward compat. Now routes through the
+// unified CelebrationLayer (food emoji shower instead of generic confetti).
+// New code should import { celebrate } from '@/lib/celebrate' directly.
 
-/** Quick confetti burst — keep under 1.2s total so it doesn't fight UI. */
+import { celebrate } from './celebrate'
+
 export function celebrateConfetti() {
-  if (typeof window === 'undefined') return
-  confetti({
-    particleCount: 70,
-    spread: 70,
-    startVelocity: 45,
-    decay: 0.92,
-    scalar: 0.9,
-    origin: { x: 0.5, y: 0.7 },
-    colors: ['#fbbf24', '#06b6d4', '#a78bfa', '#34d399', '#f43f5e'],
-    disableForReducedMotion: true,
-  })
+  celebrate.food()
 }
