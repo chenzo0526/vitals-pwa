@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { getUserTimezone } from '@/lib/dates'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Mail, Loader2, AlertTriangle, ArrowLeft, ShieldCheck } from 'lucide-react'
+import { Mail, Loader2, AlertTriangle, ArrowLeft, MailCheck, KeyRound, ChevronDown, ChevronUp } from 'lucide-react'
 
 const RESEND_COOLDOWN_SECONDS = 60
 
@@ -25,61 +25,59 @@ function LoginInner() {
   const redirectTo = params.get('redirect') || '/'
   const initialError = params.get('error')
 
-  const [stage, setStage] = useState<'email' | 'code'>('email')
+  const [stage, setStage] = useState<'email' | 'sent'>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [sending, setSending] = useState(false)
   const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState<string | null>(
-    initialError === 'callback_failed' ? 'That sign-in link expired. Try the code instead.' : null,
+    initialError === 'callback_failed' ? 'That sign-in link expired. Send a fresh one.' : null,
   )
   const [resendIn, setResendIn] = useState(0)
-
-  // Single OTP input ref. Supabase sends 7-digit codes; we cap input at 7.
+  const [showCodeEntry, setShowCodeEntry] = useState(false)
+  const [lastSentAt, setLastSentAt] = useState<number | null>(null)
   const codeInputRef = useRef<HTMLInputElement | null>(null)
-  const autoSubmittedRef = useRef(false)
-  const autoSubmitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Resend countdown
   useEffect(() => {
     if (resendIn <= 0) return
     const t = setInterval(() => setResendIn((n) => Math.max(0, n - 1)), 1000)
     return () => clearInterval(t)
   }, [resendIn])
 
-  // Auto-focus the OTP input when entering code stage.
   useEffect(() => {
-    if (stage === 'code') {
-      autoSubmittedRef.current = false
-      codeInputRef.current?.focus()
-    }
-  }, [stage])
+    if (showCodeEntry) setTimeout(() => codeInputRef.current?.focus(), 100)
+  }, [showCodeEntry])
 
-  const canVerify = code.length >= 4 && /^\d+$/.test(code)
+  const canVerify = code.trim().length >= 4 && /^\d+$/.test(code.trim())
 
   const sendCode = useCallback(async () => {
     if (!email.trim() || sending) return
     setSending(true)
     setError(null)
     try {
+      const redirectUrl = typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
+        : undefined
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
-        options: { shouldCreateUser: true },
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: redirectUrl,
+        },
       })
       if (otpError) throw otpError
-      setStage('code')
+      setStage('sent')
       setCode('')
-      autoSubmittedRef.current = false
       setResendIn(RESEND_COOLDOWN_SECONDS)
+      setLastSentAt(Date.now())
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send code. Try again.')
+      const raw = e instanceof Error ? e.message : 'Could not send. Try again.'
+      setError(raw)
     } finally {
       setSending(false)
     }
   }, [email, sending])
 
-  // verify() can be called with an override token (used by auto-submit so we don't
-  // race React state). Without an override, it falls back to current code state.
   const verify = useCallback(async (overrideToken?: string) => {
     if (verifying) return
     const token = (overrideToken ?? code).trim()
@@ -97,7 +95,6 @@ function LoginInner() {
       const user = data.session.user
       const tz = getUserTimezone()
       const trialEndsIso = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
-      // Upsert profile (handle_new_user trigger may have created the row already).
       await supabase.from('user_profile').upsert({
         id: user.id,
         tier: 'pro',
@@ -117,77 +114,40 @@ function LoginInner() {
       } else {
         router.push(redirectTo)
       }
-      // Hard-refresh after navigation so middleware re-reads the session cookie.
       router.refresh()
     } catch (e) {
-      // Surface the RAW error from Supabase so we can actually diagnose. Plus a friendly hint.
-      const raw = e instanceof Error ? e.message : 'Invalid or expired code.'
-      // Log to console for any dev tools the user has open
-      console.error('[verify] Supabase OTP error:', raw, 'token length:', token.length, 'first/last digits:', token[0], token[token.length - 1])
+      const raw = e instanceof Error ? e.message : "Code didn't work."
+      console.error('[verify] Supabase OTP error:', raw, 'token len:', token.length)
       const isExpiry = /expired/i.test(raw)
-      const isInvalid = /invalid/i.test(raw)
-      const isTooManyRequests = /too many|rate/i.test(raw)
+      const isInvalid = /invalid|token/i.test(raw)
       let hint = ''
-      if (isExpiry) hint = 'Code expired — tap Resend, then paste the newest code immediately.'
-      else if (isInvalid) hint = 'Code was rejected. iOS may have autofilled an OLD code. Tap Resend → wait 5 seconds → manually copy the NEWEST email\'s code → paste here. Codes are 7 digits.'
-      else if (isTooManyRequests) hint = 'Too many requests. Wait 30 seconds, then try Resend.'
-      // Show BOTH the raw error AND the hint so we can debug AND so user gets actionable advice
-      setError(hint ? `${hint}\n\n[debug: ${raw}]` : `${raw}\n\nTap Resend and try the newest code.`)
-      // Clear the input so iOS doesn't keep re-pasting the same stale code on the next keystroke.
+      if (isExpiry) hint = 'Code expired. Tap Resend below and use the NEWEST email — older codes stop working immediately.'
+      else if (isInvalid) hint = 'Code rejected. iOS often autofills the previous code — tap Resend, wait for the new email, manually copy the code from THAT email (not autofill).'
+      else hint = raw
+      setError(hint)
       setCode('')
-      autoSubmittedRef.current = false
-      if (autoSubmitTimerRef.current) {
-        clearTimeout(autoSubmitTimerRef.current)
-        autoSubmitTimerRef.current = null
-      }
-      // Allow immediate resend on failure — no point making them wait 60s when the code is dead.
       setResendIn(0)
       setVerifying(false)
-      // Refocus the input so the next paste/typing lands here.
       setTimeout(() => codeInputRef.current?.focus(), 0)
     }
   }, [code, email, redirectTo, router, verifying])
 
-  function onCodeChange(value: string) {
-    // Strip non-digits, cap at 7 (Supabase's exact OTP length).
-    // Hard cap prevents iOS autofill from appending stray digits from elsewhere in the email.
-    const clean = value.replace(/\D/g, '').slice(0, 7)
-    setCode(clean)
-    if (error) setError(null)
-
-    // Cancel any pending auto-submit — iOS autofill pastes digit-by-digit with ~50ms
-    // gaps; debouncing waits for the burst to settle before we fire verify().
-    if (autoSubmitTimerRef.current) {
-      clearTimeout(autoSubmitTimerRef.current)
-      autoSubmitTimerRef.current = null
-    }
-
-    if (clean.length === 7 && !autoSubmittedRef.current && !verifying) {
-      // Schedule auto-submit 300ms after the LAST input event. If iOS keeps adding
-      // digits we cap at 7 and the next setTimeout replaces this one.
-      autoSubmitTimerRef.current = setTimeout(() => {
-        autoSubmittedRef.current = true
-        // Pass value directly — React state may not have flushed yet.
-        verify(clean)
-        autoSubmitTimerRef.current = null
-      }, 300)
-    }
-    if (clean.length < 7) autoSubmittedRef.current = false
-  }
-
-  function onCodeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter' && canVerify) {
-      e.preventDefault()
-      verify(code)
-    }
-  }
-
   function changeEmail() {
     setStage('email')
     setCode('')
-    autoSubmittedRef.current = false
     setError(null)
+    setShowCodeEntry(false)
+    setLastSentAt(null)
   }
+
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    if (!lastSentAt) return
+    const t = setInterval(() => setTick((x) => x + 1), 1000)
+    return () => clearInterval(t)
+  }, [lastSentAt])
+  const sinceSentSec = lastSentAt ? Math.floor((Date.now() - lastSentAt) / 1000) : 0
+  void tick
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
@@ -220,6 +180,7 @@ function LoginInner() {
                         inputMode="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
+                        onBlur={(e) => setEmail(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter' && email && !sending) sendCode() }}
                         placeholder="you@example.com"
                         className="w-full bg-white/5 border border-white/10 rounded-md pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400/50"
@@ -235,71 +196,7 @@ function LoginInner() {
                     {sending ? (
                       <><Loader2 size={16} className="mr-2 animate-spin" /> Sending…</>
                     ) : (
-                      'Send code'
-                    )}
-                  </Button>
-
-                  {error && (
-                    <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded-md p-2 flex items-start gap-1.5">
-                      <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
-                      <span>{error}</span>
-                    </div>
-                  )}
-
-                  <p className="text-[11px] text-white/40 text-center leading-snug pt-1">
-                    No passwords. We email you a 6-digit code.<br />
-                    By continuing you agree to the{' '}
-                    <a href="/terms" className="text-cyan-400 underline">Terms</a>
-                    {' '}and{' '}
-                    <a href="/privacy" className="text-cyan-400 underline">Privacy Policy</a>.
-                  </p>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="code"
-                  initial={{ opacity: 0, x: 12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 12 }}
-                  transition={{ duration: 0.18, ease: 'easeOut' }}
-                  className="space-y-4"
-                >
-                  <div className="text-center">
-                    <div className="w-10 h-10 mx-auto rounded-full bg-amber-400/10 border border-amber-400/30 flex items-center justify-center mb-3">
-                      <ShieldCheck size={18} className="text-amber-300" />
-                    </div>
-                    <p className="text-sm font-semibold text-white">Enter the code from your email</p>
-                    <p className="text-xs text-white/50 mt-1">
-                      Sent to <span className="text-amber-300">{email}</span>
-                    </p>
-                  </div>
-
-                  <div>
-                    <input
-                      ref={codeInputRef}
-                      type="text"
-                      inputMode="numeric"
-                      pattern="\d*"
-                      autoComplete="one-time-code"
-                      maxLength={7}
-                      value={code}
-                      onChange={(e) => onCodeChange(e.target.value)}
-                      onKeyDown={onCodeKeyDown}
-                      onFocus={(e) => e.currentTarget.select()}
-                      placeholder="• • • • • • •"
-                      className="w-full h-14 text-center text-3xl font-mono font-bold tabular-nums tracking-[0.4em] bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-amber-400/50 focus:bg-white/10"
-                      aria-label="One-time code"
-                    />
-                  </div>
-
-                  <Button
-                    onClick={() => verify(code)}
-                    disabled={!canVerify || verifying}
-                    className="w-full bg-amber-400 text-black font-bold hover:bg-amber-300 disabled:opacity-40 h-11"
-                  >
-                    {verifying ? (
-                      <><Loader2 size={16} className="mr-2 animate-spin" /> Verifying…</>
-                    ) : (
-                      'Verify'
+                      'Send sign-in email'
                     )}
                   </Button>
 
@@ -309,6 +206,42 @@ function LoginInner() {
                       <span className="whitespace-pre-line leading-relaxed">{error}</span>
                     </div>
                   )}
+
+                  <p className="text-[11px] text-white/40 text-center leading-snug pt-1">
+                    No passwords. We email you a magic link.<br />
+                    By continuing you agree to the{' '}
+                    <a href="/terms" className="text-cyan-400 underline">Terms</a>
+                    {' '}and{' '}
+                    <a href="/privacy" className="text-cyan-400 underline">Privacy Policy</a>.
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="sent"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 12 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  className="space-y-4"
+                >
+                  <div className="text-center">
+                    <div className="w-12 h-12 mx-auto rounded-full bg-emerald-400/10 border border-emerald-400/30 flex items-center justify-center mb-3">
+                      <MailCheck size={22} className="text-emerald-300" />
+                    </div>
+                    <p className="text-base font-bold text-white">Check your email</p>
+                    <p className="text-xs text-white/60 mt-1">
+                      Sent to <span className="text-amber-300 font-semibold">{email}</span>
+                    </p>
+                    <p className="text-xs text-emerald-300 mt-3 px-2 leading-relaxed font-semibold">
+                      Tap the &quot;Sign in to VITALS&quot; button in the email — it logs you in automatically.
+                    </p>
+                    {sinceSentSec < 10 && (
+                      <p className="text-[10px] text-white/40 mt-2">Email usually arrives in 5-15 seconds.</p>
+                    )}
+                    {sinceSentSec >= 30 && sinceSentSec < 90 && (
+                      <p className="text-[10px] text-amber-300/70 mt-2">Not seeing it? Check spam, or tap Resend.</p>
+                    )}
+                  </div>
 
                   <div className="flex items-center justify-between pt-1 text-xs">
                     <button
@@ -326,9 +259,79 @@ function LoginInner() {
                         ? 'Resending…'
                         : resendIn > 0
                           ? `Resend in ${resendIn}s`
-                          : 'Resend code'}
+                          : 'Resend email'}
                     </button>
                   </div>
+
+                  <div className="pt-3 border-t border-white/5">
+                    <button
+                      onClick={() => setShowCodeEntry((s) => !s)}
+                      className="w-full text-xs text-white/50 hover:text-white/80 flex items-center justify-center gap-1.5 py-1"
+                    >
+                      <KeyRound size={12} />
+                      {showCodeEntry ? 'Hide code entry' : 'Or enter the code manually'}
+                      {showCodeEntry ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {showCodeEntry && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.18 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="space-y-2.5 pt-3">
+                            <p className="text-[10px] text-amber-200/70 bg-amber-400/[0.05] border border-amber-400/20 rounded p-2 leading-relaxed">
+                              <span className="font-bold">If autofill keeps failing:</span> tap Resend → wait 5 seconds → open the NEWEST email → long-press the code → Copy → paste here.
+                            </p>
+                            <input
+                              ref={codeInputRef}
+                              type="text"
+                              inputMode="numeric"
+                              pattern="\d*"
+                              autoComplete="one-time-code"
+                              maxLength={10}
+                              value={code}
+                              onChange={(e) => {
+                                const clean = e.target.value.replace(/\D/g, '').slice(0, 10)
+                                setCode(clean)
+                                if (error) setError(null)
+                              }}
+                              onBlur={(e) => {
+                                const clean = e.target.value.replace(/\D/g, '').slice(0, 10)
+                                setCode(clean)
+                              }}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && canVerify) verify(code) }}
+                              onFocus={(e) => e.currentTarget.select()}
+                              placeholder="• • • • • • •"
+                              className="w-full h-14 text-center text-2xl font-mono font-bold tabular-nums tracking-[0.3em] bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/20 focus:outline-none focus:border-amber-400/50 focus:bg-white/10"
+                              aria-label="One-time code"
+                            />
+                            <Button
+                              onClick={() => verify(code)}
+                              disabled={!canVerify || verifying}
+                              className="w-full bg-amber-400 text-black font-bold hover:bg-amber-300 disabled:opacity-40 h-11"
+                            >
+                              {verifying ? (
+                                <><Loader2 size={16} className="mr-2 animate-spin" /> Verifying…</>
+                              ) : (
+                                'Verify code'
+                              )}
+                            </Button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {error && (
+                    <div className="text-xs text-rose-300 bg-rose-500/10 border border-rose-400/30 rounded-md p-2 flex items-start gap-1.5">
+                      <AlertTriangle size={12} className="mt-0.5 flex-shrink-0" />
+                      <span className="whitespace-pre-line leading-relaxed">{error}</span>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
