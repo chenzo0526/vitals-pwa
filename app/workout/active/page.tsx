@@ -166,6 +166,45 @@ function ActiveWorkoutInner() {
     setDraftSets((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx))
   }
 
+  async function logSingleSet(idx: number) {
+    if (!session || !sessionId) return
+    const name = exerciseName.trim()
+    if (!name) { setError('Pick an exercise first'); return }
+    const d = draftSets[idx]
+    if (!d || (!d.weight_lb && !d.reps)) { setError('Enter weight or reps'); return }
+    setError(null)
+    setSavingExercise(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login?redirect=/workout'); return }
+      const setNum = nextSetNumber
+      const row = {
+        session_id: sessionId,
+        user_id: user.id,
+        exercise_name: name,
+        set_number: setNum,
+        weight_lb: d.weight_lb ? Number(d.weight_lb) : null,
+        reps: d.reps ? Number(d.reps) : null,
+        rpe: d.rpe ? Number(d.rpe) : null,
+      }
+      const { data, error: insertErr } = await supabase.from('workout_sets').insert([row]).select()
+      if (insertErr) throw new Error(insertErr.message)
+      if (data) setAllSets((prev) => [...prev, ...(data as SetRow[])])
+      // Remove this draft row + keep weight as prefill for the next set
+      setDraftSets((prev) => {
+        const remaining = prev.filter((_, i) => i !== idx)
+        if (remaining.length === 0) return [{ weight_lb: d.weight_lb, reps: d.reps, rpe: '' }]
+        return remaining
+      })
+      setRestRemaining(90)
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(30)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not log set')
+    } finally {
+      setSavingExercise(false)
+    }
+  }
+
   async function saveExercise() {
     if (!session || !sessionId) return
     const name = exerciseName.trim()
@@ -236,6 +275,14 @@ function ActiveWorkoutInner() {
     setRestRemaining(null)
   }
 
+  async function cancelSession() {
+    if (!sessionId) return
+    if (!confirm('Cancel this session and DELETE it (plus all sets logged)? This cannot be undone.')) return
+    await supabase.from('workout_sets').delete().eq('session_id', sessionId)
+    await supabase.from('workout_sessions').delete().eq('id', sessionId)
+    router.push('/workout')
+  }
+
   if (!sessionId) {
     return (
       <div className="px-4 pt-6">
@@ -250,18 +297,27 @@ function ActiveWorkoutInner() {
       {/* Header */}
       <Card className="border-green-400/20 bg-green-400/5">
         <CardContent className="py-3">
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
               <p className="text-green-400 font-bold text-sm uppercase tracking-wider">Live session</p>
-              <p className="text-white text-base mt-0.5">{session?.focus || 'General training'}</p>
+              <p className="text-white text-base mt-0.5 truncate">{session?.focus || 'General training'}</p>
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-mono font-bold text-amber-400 tabular-nums">{fmtTime(elapsed)}</p>
-              {session?.energy_pre != null && (
-                <Badge variant="outline" className="border-amber-400/30 text-amber-300 text-[10px] mt-1">
-                  energy {session.energy_pre}/10
-                </Badge>
-              )}
+            <div className="text-right flex flex-col items-end gap-1">
+              <p className="text-2xl font-mono font-bold text-amber-400 tabular-nums leading-none">{fmtTime(elapsed)}</p>
+              <div className="flex items-center gap-1.5">
+                {session?.energy_pre != null && (
+                  <Badge variant="outline" className="border-amber-400/30 text-amber-300 text-[10px]">
+                    energy {session.energy_pre}/10
+                  </Badge>
+                )}
+                <button
+                  onClick={cancelSession}
+                  className="text-[10px] uppercase tracking-wider text-rose-400/70 hover:text-rose-300 hover:underline px-1"
+                  aria-label="Cancel and delete session"
+                >
+                  cancel
+                </button>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -360,53 +416,63 @@ function ActiveWorkoutInner() {
                 <span className="font-bold">RPE = Rate of Perceived Exertion (1-10).</span> How hard the set felt. 10 = absolute max, 9 = 1 rep in reserve, 8 = 2 RIR, 7 = 3 RIR. Optional — only track it if you find it useful.
               </p>
             )}
-            <div className="grid grid-cols-[1.4rem_1fr_1fr_1.7rem] gap-2 text-[10px] uppercase tracking-wider text-white/40">
-              <span className="text-center">#</span>
-              <span>Weight (lb)</span>
-              <span>Reps</span>
-              <span />
-            </div>
             {draftSets.map((d, i) => (
-              <div key={i} className="space-y-1.5">
-                <div className="grid grid-cols-[1.4rem_1fr_1fr_1.7rem] gap-2 items-center">
-                  <span className="text-white/40 text-xs font-mono tabular-nums text-center">{nextSetNumber + i}</span>
-                  <input
-                    type="number" inputMode="decimal" value={d.weight_lb}
-                    onChange={(e) => updateDraftSet(i, 'weight_lb', e.target.value)}
-                    onBlur={(e) => updateDraftSet(i, 'weight_lb', e.target.value)}
-                    placeholder="0"
-                    className="bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
-                  />
-                  <input
-                    type="number" inputMode="numeric" value={d.reps}
-                    onChange={(e) => updateDraftSet(i, 'reps', e.target.value)}
-                    onBlur={(e) => updateDraftSet(i, 'reps', e.target.value)}
-                    placeholder="0"
-                    className="bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
-                  />
+              <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold tabular-nums">
+                    Set {nextSetNumber + i}
+                  </span>
                   <button
                     onClick={() => removeDraftRow(i)}
-                    className="text-white/30 hover:text-rose-400 disabled:opacity-30 flex justify-center"
+                    className="text-white/30 hover:text-rose-400 disabled:opacity-20 p-0.5"
                     disabled={draftSets.length === 1}
+                    aria-label="Remove this draft"
                   >
-                    <X size={14} />
+                    <X size={12} />
                   </button>
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] uppercase tracking-wider text-white/40">Weight (lb)</label>
+                    <input
+                      type="number" inputMode="decimal" value={d.weight_lb}
+                      onChange={(e) => updateDraftSet(i, 'weight_lb', e.target.value)}
+                      onBlur={(e) => updateDraftSet(i, 'weight_lb', e.target.value)}
+                      placeholder="0"
+                      className="w-full mt-0.5 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] uppercase tracking-wider text-white/40">Reps</label>
+                    <input
+                      type="number" inputMode="numeric" value={d.reps}
+                      onChange={(e) => updateDraftSet(i, 'reps', e.target.value)}
+                      onBlur={(e) => updateDraftSet(i, 'reps', e.target.value)}
+                      placeholder="0"
+                      className="w-full mt-0.5 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
+                    />
+                  </div>
+                </div>
                 {showRpe && (
-                  <div className="grid grid-cols-[1.4rem_1fr_1.7rem] gap-2 items-center pl-0">
-                    <span />
-                    <div className="relative">
-                      <input
-                        type="number" inputMode="decimal" step="0.5" min="1" max="10" value={d.rpe}
-                        onChange={(e) => updateDraftSet(i, 'rpe', e.target.value)}
-                        onBlur={(e) => updateDraftSet(i, 'rpe', e.target.value)}
-                        placeholder="RPE 1-10"
-                        className="w-full bg-white/[0.03] border border-white/10 rounded-md px-2 py-1.5 text-xs tabular-nums focus:outline-none focus:border-amber-400/40 text-amber-200/80"
-                      />
-                    </div>
-                    <span />
+                  <div>
+                    <label className="text-[9px] uppercase tracking-wider text-amber-300/60">RPE 1-10</label>
+                    <input
+                      type="number" inputMode="decimal" step="0.5" min="1" max="10" value={d.rpe}
+                      onChange={(e) => updateDraftSet(i, 'rpe', e.target.value)}
+                      onBlur={(e) => updateDraftSet(i, 'rpe', e.target.value)}
+                      placeholder="Optional"
+                      className="w-full mt-0.5 bg-white/[0.03] border border-amber-400/20 rounded-md px-2 py-1.5 text-xs tabular-nums focus:outline-none focus:border-amber-400/40 text-amber-200/80"
+                    />
                   </div>
                 )}
+                <Button
+                  onClick={() => logSingleSet(i)}
+                  disabled={savingExercise || !exerciseName.trim() || (!d.weight_lb && !d.reps)}
+                  className="w-full bg-emerald-400 text-black hover:bg-emerald-300 disabled:opacity-30 font-bold h-9 text-xs"
+                >
+                  {savingExercise ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Check size={12} className="mr-1" />}
+                  Log Set & Start Rest
+                </Button>
               </div>
             ))}
           </div>
@@ -417,15 +483,15 @@ function ActiveWorkoutInner() {
               variant="outline"
               className="flex-1 border-white/20 text-white/70 hover:bg-white/10"
             >
-              <Plus size={14} className="mr-1" /> Add Set
+              <Plus size={14} className="mr-1" /> Add another draft
             </Button>
             <Button
               onClick={saveExercise}
-              disabled={savingExercise || !exerciseName.trim()}
-              className="flex-1 bg-amber-400 text-black hover:bg-amber-300 disabled:opacity-30 font-bold"
+              disabled={savingExercise || !exerciseName.trim() || draftSets.every(d => !d.weight_lb && !d.reps)}
+              className="flex-1 bg-amber-400/20 border border-amber-400/40 text-amber-200 hover:bg-amber-400/30 disabled:opacity-30 text-xs"
+              title="Save all drafts at once (instead of one-at-a-time)"
             >
-              {savingExercise ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Check size={14} className="mr-1" />}
-              Save Exercise
+              Save all drafts
             </Button>
           </div>
 

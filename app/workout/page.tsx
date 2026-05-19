@@ -154,6 +154,17 @@ export default function WorkoutPage() {
   }
 
   async function startScheduledNow(s: ScheduledWorkout) {
+    // If the scheduled time is more than 15 minutes in the future, double-check before starting.
+    // This prevents accidental starts when user just glances at the upcoming list.
+    const scheduledMs = new Date(s.scheduled_at).getTime()
+    const minutesUntil = Math.round((scheduledMs - Date.now()) / 60000)
+    if (minutesUntil > 15) {
+      const when = new Date(s.scheduled_at).toLocaleString('en-US', {
+        weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      })
+      const ok = confirm(`This workout was scheduled for ${when} (${minutesUntil} min from now).\n\nStart it RIGHT NOW anyway?`)
+      if (!ok) return
+    }
     const { error: upErr } = await supabase
       .from('workout_sessions')
       .update({ started_at: new Date().toISOString() })

@@ -145,6 +145,24 @@ export default function HistoryDetailPage() {
     setIntake((arr) => arr.filter((i) => i.id !== id))
   }
 
+  async function deleteWorkout(id: string) {
+    if (!confirm('Delete this workout AND all its sets? This cannot be undone.')) return
+    // Delete sets first (FK might cascade, but be safe)
+    await supabase.from('workout_sets').delete().eq('session_id', id)
+    await supabase.from('workout_sessions').delete().eq('id', id)
+    setWorkouts((arr) => arr.filter((w) => w.id !== id))
+    setSetsBySession((m) => { const c = { ...m }; delete c[id]; return c })
+  }
+
+  async function deleteSet(setId: string, sessionId: string) {
+    if (!confirm('Delete this set?')) return
+    await supabase.from('workout_sets').delete().eq('id', setId)
+    setSetsBySession((m) => ({
+      ...m,
+      [sessionId]: (m[sessionId] || []).filter((s) => s.id !== setId),
+    }))
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -233,10 +251,19 @@ export default function HistoryDetailPage() {
             return (
               <Card key={w.id} className="border-emerald-400/20 bg-emerald-500/5">
                 <CardContent className="p-3 space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-bold text-emerald-100">{w.focus || 'Workout'}</p>
-                    <div className="flex items-center gap-1 text-[10px] text-emerald-200/70 tabular-nums">
-                      {startTime} {durationMin != null && `· ${durationMin}m`}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[10px] text-emerald-200/70 tabular-nums">
+                        {startTime} {durationMin != null && `· ${durationMin}m`}
+                      </span>
+                      <button
+                        onClick={() => deleteWorkout(w.id)}
+                        className="p-1 rounded-md text-rose-400/70 hover:text-rose-300 hover:bg-rose-500/10"
+                        aria-label="Delete workout"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </div>
                   </div>
                   {w.energy_pre != null && (
@@ -251,11 +278,18 @@ export default function HistoryDetailPage() {
                           <p className="text-xs font-semibold text-white">{ex}</p>
                           <div className="flex flex-wrap gap-1 mt-0.5">
                             {exSets.map((s) => (
-                              <span key={s.id} className="text-[10px] tabular-nums px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/70">
+                              <span key={s.id} className="text-[10px] tabular-nums px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/70 inline-flex items-center gap-1 group">
                                 {s.weight_lb != null ? `${s.weight_lb}lb` : ''}
                                 {s.weight_lb != null && s.reps != null ? ' × ' : ''}
                                 {s.reps != null ? `${s.reps}` : ''}
                                 {s.rpe != null ? ` @ ${s.rpe}` : ''}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); deleteSet(s.id, w.id) }}
+                                  className="opacity-30 hover:opacity-100 hover:text-rose-300 transition-opacity ml-0.5"
+                                  aria-label="Delete set"
+                                >
+                                  <Trash2 size={9} />
+                                </button>
                               </span>
                             ))}
                           </div>
