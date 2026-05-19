@@ -97,6 +97,7 @@ export async function GET(req: NextRequest) {
       lifeEventsRes,
       recentCheckinsRes,
       recentBiometricsRes,
+      dismissalsRes,
     ] = await Promise.all([
       supabase.from('onboarding_progress').select('identity_data, rhythm_data, first_goal, thirty_day_checkpoint').eq('user_id', userId).maybeSingle(),
       supabase.from('substances').select('*').eq('user_id', userId).eq('active', true),
@@ -130,6 +131,14 @@ export async function GET(req: NextRequest) {
         .gte('for_date', sevenDaysAgoLocal)
         .order('for_date', { ascending: false })
         .limit(7),
+      // Snoozed Coach topics — the user clicked "got it" on these; respect for 14d window
+      supabase
+        .from('coach_insight_dismissals')
+        .select('topic_key, topic_title, dismissed_until')
+        .eq('user_id', userId)
+        .gt('dismissed_until', new Date().toISOString())
+        .order('dismissed_until', { ascending: false })
+        .limit(30),
     ])
 
     const identity = (onboardingRes.data?.identity_data || {}) as Record<string, unknown>
@@ -228,6 +237,12 @@ export async function GET(req: NextRequest) {
       daily_checkins_last_7d: recentCheckinsRes.data || [],
       // Biometric data — HRV, RHR, sleep stages, recovery scores. Watch HRV drops + RHR rises = overtraining/stress.
       biometrics_last_7d: recentBiometricsRes.data || [],
+      // Snoozed insight topics — user said "got it, stop telling me daily." Don't regenerate these themes until dismissed_until passes.
+      snoozed_topics: (dismissalsRes.data || []).map((d) => ({
+        topic_key: d.topic_key,
+        title: d.topic_title,
+        until: d.dismissed_until,
+      })),
       // Calorie / macro targets — use these for nutrition timing + deficit specificity
       calorie_target: calTarget.is_complete ? {
         goal: inferredGoal,

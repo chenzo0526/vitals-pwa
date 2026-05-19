@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
-import { Sparkles, Loader2, RefreshCw, AlertTriangle, ChevronRight, Brain, Dumbbell, FlaskConical, Heart, Apple, Camera, Activity } from 'lucide-react'
+import { Sparkles, Loader2, RefreshCw, AlertTriangle, ChevronRight, Brain, Dumbbell, FlaskConical, Heart, Apple, Camera, Activity, BellOff, Check } from 'lucide-react'
 
 type InsightType = 'nutrition' | 'training' | 'protocol' | 'recovery' | 'bloodwork' | 'body_comp' | 'general'
 
 type Insight = {
   type: InsightType
+  topic_key?: string
   title: string
   body: string
   urgency: 'low' | 'medium' | 'high'
@@ -45,6 +46,27 @@ export default function CoachInsightCard() {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<number | null>(0) // first card expanded by default
+  const [snoozing, setSnoozing] = useState<string | null>(null)
+  const [snoozed, setSnoozed] = useState<Set<string>>(new Set())
+
+  async function snoozeTopic(topicKey: string, topicTitle: string) {
+    if (!topicKey || snoozing) return
+    setSnoozing(topicKey)
+    try {
+      const res = await fetch('/api/coach-dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic_key: topicKey, topic_title: topicTitle, days: 14 }),
+      })
+      if (res.ok) {
+        setSnoozed((s) => new Set(s).add(topicKey))
+      }
+    } catch {
+      // silent — user can retry
+    } finally {
+      setSnoozing(null)
+    }
+  }
 
   async function fetchCoach(forceRefresh = false) {
     if (forceRefresh) setGenerating(true)
@@ -108,7 +130,7 @@ export default function CoachInsightCard() {
               <Sparkles size={14} className="text-amber-400" />
             </div>
             <div>
-              <p className="text-sm font-bold text-white leading-tight">Today's Intelligence</p>
+              <p className="text-sm font-bold text-white leading-tight">Today&apos;s Intelligence</p>
               <p className="text-[10px] text-white/40">
                 {data?.cached ? 'Cached — generated earlier today' : 'Fresh read'}
                 {data?.generated_at && ` · ${new Date(data.generated_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`}
@@ -128,7 +150,7 @@ export default function CoachInsightCard() {
         {/* Insights */}
         {!hasInsights && !generating && (
           <div className="text-center py-3">
-            <p className="text-xs text-white/50">No insights yet. Log your stack + a meal to unlock today's read.</p>
+            <p className="text-xs text-white/50">No insights yet. Log your stack + a meal to unlock today&apos;s read.</p>
           </div>
         )}
 
@@ -176,6 +198,32 @@ export default function CoachInsightCard() {
                                     {src}
                                   </span>
                                 ))}
+                              </div>
+                            )}
+                            {ins.topic_key && (
+                              <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-end">
+                                {snoozed.has(ins.topic_key) ? (
+                                  <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-300 inline-flex items-center gap-1">
+                                    <Check size={11} /> Got it — paused 14 days
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      snoozeTopic(ins.topic_key!, ins.title)
+                                    }}
+                                    disabled={snoozing === ins.topic_key}
+                                    className="text-[10px] uppercase tracking-wider font-bold text-white/40 hover:text-white/80 disabled:opacity-50 inline-flex items-center gap-1 px-1.5 py-1 rounded hover:bg-white/5"
+                                    aria-label="Got it — stop showing this for 14 days"
+                                  >
+                                    {snoozing === ins.topic_key ? (
+                                      <Loader2 size={11} className="animate-spin" />
+                                    ) : (
+                                      <BellOff size={11} />
+                                    )}
+                                    Got it — pause 14d
+                                  </button>
+                                )}
                               </div>
                             )}
                           </motion.div>
