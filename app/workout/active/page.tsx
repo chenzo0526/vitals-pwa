@@ -2,12 +2,14 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, Square, Loader2, Check, Dumbbell, X, Clock } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Plus, Square, Loader2, Check, Dumbbell, X, Clock, Edit3, Trash2, Mic, MicOff, Sparkles, ChevronDown, ChevronUp, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { supabase } from '@/lib/supabase'
+import ExercisePicker from '@/components/ExercisePicker'
 
 type SessionRow = {
   id: string
@@ -30,6 +32,19 @@ type SetRow = {
 
 type DraftSet = { weight_lb: string; reps: string; rpe: string }
 
+// Voice types (avoid global collision)
+type VJWREvent = { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }
+type VJWRecognizer = {
+  continuous: boolean; interimResults: boolean; lang: string
+  start: () => void; stop: () => void
+  onresult: ((e: VJWREvent) => void) | null
+  onerror: ((e: { error: string }) => void) | null
+  onend: (() => void) | null
+}
+
+const MOOD_CHIPS = ['Crushed it', 'Solid', 'Average', 'Off today', 'Drained', 'Strong', 'Joints felt off', 'Low energy']
+const NOTE_QUICK_CHIPS = ['PR hit', 'Form breakdown late sets', 'Felt fast', 'Felt heavy', 'Cardio after', 'Skipped accessories', 'Bad sleep showed']
+
 export default function ActiveWorkoutPage() {
   return (
     <Suspense fallback={<div className="px-4 pt-6 text-white/40 text-sm">Loading session…</div>}>
@@ -46,15 +61,17 @@ function ActiveWorkoutInner() {
   const [session, setSession] = useState<SessionRow | null>(null)
   const [allSets, setAllSets] = useState<SetRow[]>([])
   const [exerciseName, setExerciseName] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [draftSets, setDraftSets] = useState<DraftSet[]>([{ weight_lb: '', reps: '', rpe: '' }])
+  const [showRpe, setShowRpe] = useState(false)
+  const [showRpeInfo, setShowRpeInfo] = useState(false)
   const [savingExercise, setSavingExercise] = useState(false)
   const [restRemaining, setRestRemaining] = useState<number | null>(null)
   const [showEnd, setShowEnd] = useState(false)
+  const [editingSet, setEditingSet] = useState<SetRow | null>(null)
   const [now, setNow] = useState<number>(() => Date.now())
   const [error, setError] = useState<string | null>(null)
   const [previousExercises, setPreviousExercises] = useState<string[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   // Load session + sets
   useEffect(() => {
@@ -73,7 +90,7 @@ function ActiveWorkoutInner() {
     return () => { cancelled = true }
   }, [sessionId])
 
-  // Load previous exercise names for autocomplete (across all user sessions, deduped)
+  // Load previous exercise names (recents for the picker)
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -98,7 +115,7 @@ function ActiveWorkoutInner() {
     return () => { cancelled = true }
   }, [])
 
-  // Live timers (elapsed + rest countdown)
+  // Live timers
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
@@ -136,12 +153,6 @@ function ActiveWorkoutInner() {
     return Math.max(...sameExercise.map((s) => s.set_number)) + 1
   }, [allSets, exerciseName])
 
-  const suggestions = useMemo(() => {
-    if (!exerciseName.trim()) return previousExercises.slice(0, 5)
-    const q = exerciseName.toLowerCase()
-    return previousExercises.filter((e) => e.toLowerCase().includes(q) && e.toLowerCase() !== q).slice(0, 5)
-  }, [exerciseName, previousExercises])
-
   function updateDraftSet(idx: number, key: keyof DraftSet, value: string) {
     setDraftSets((prev) => prev.map((s, i) => (i === idx ? { ...s, [key]: value } : s)))
   }
@@ -159,12 +170,12 @@ function ActiveWorkoutInner() {
     if (!session || !sessionId) return
     const name = exerciseName.trim()
     if (!name) {
-      setError('Exercise name required')
+      setError('Tap to pick an exercise first')
       return
     }
     const validRows = draftSets.filter((d) => d.weight_lb || d.reps)
     if (validRows.length === 0) {
-      setError('Add at least one set with weight or reps')
+      setError('Add weight or reps for at least one set')
       return
     }
     setSavingExercise(true)
@@ -192,8 +203,7 @@ function ActiveWorkoutInner() {
       // Reset for next exercise + start rest timer
       setExerciseName('')
       setDraftSets([{ weight_lb: '', reps: '', rpe: '' }])
-      setShowSuggestions(false)
-      setRestRemaining(60)
+      setRestRemaining(90)
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(30)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed')
@@ -202,15 +212,34 @@ function ActiveWorkoutInner() {
     }
   }
 
+  async function deleteSet(id: string) {
+    if (!confirm('Delete this set?')) return
+    const { error: delErr } = await supabase.from('workout_sets').delete().eq('id', id)
+    if (delErr) {
+      setError(delErr.message)
+      return
+    }
+    setAllSets((prev) => prev.filter((s) => s.id !== id))
+  }
+
+  async function saveEditedSet(s: SetRow, patch: { weight_lb: number | null; reps: number | null; rpe: number | null }) {
+    const { error: upErr } = await supabase.from('workout_sets').update(patch).eq('id', s.id)
+    if (upErr) {
+      setError(upErr.message)
+      return
+    }
+    setAllSets((prev) => prev.map((x) => (x.id === s.id ? { ...x, ...patch } : x)))
+    setEditingSet(null)
+  }
+
   function skipRest() {
     setRestRemaining(null)
-    inputRef.current?.focus()
   }
 
   if (!sessionId) {
     return (
       <div className="px-4 pt-6">
-        <p className="text-rose-300 text-sm">No session id. </p>
+        <p className="text-rose-300 text-sm">No session id.</p>
         <Button onClick={() => router.push('/workout')} className="mt-3 bg-amber-400 text-black">Back to workout</Button>
       </div>
     )
@@ -250,31 +279,37 @@ function ActiveWorkoutInner() {
               </div>
             </div>
             <Button onClick={skipRest} variant="outline" className="border-cyan-400/30 text-cyan-200 hover:bg-cyan-500/20">
-              Skip Rest
+              Skip
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* Already logged exercises */}
+      {/* Logged exercises — each set is tappable to edit */}
       {groupedByExercise.length > 0 && (
         <div>
-          <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Logged</p>
+          <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Logged · tap a set to edit</p>
           <div className="space-y-2">
             {groupedByExercise.map(([name, sets]) => (
               <Card key={name} className="border-white/10 bg-white/5">
-                <CardContent className="py-2 px-3">
+                <CardContent className="py-2.5 px-3">
                   <p className="text-white text-sm font-medium flex items-center gap-1.5">
                     <Dumbbell size={13} className="text-white/40" /> {name}
                   </p>
-                  <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {sets.map((s) => (
-                      <span key={s.id} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/70">
-                        {s.weight_lb ? `${s.weight_lb}lb` : ''}
-                        {s.weight_lb && s.reps ? ' × ' : ''}
-                        {s.reps ? `${s.reps}` : ''}
-                        {s.rpe ? ` @${s.rpe}` : ''}
-                      </span>
+                      <button
+                        key={s.id}
+                        onClick={() => setEditingSet(s)}
+                        className="text-[11px] px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/80 hover:bg-white/10 hover:border-amber-400/30 tabular-nums flex items-center gap-1"
+                      >
+                        <span className="text-white/40">#{s.set_number}</span>
+                        {s.weight_lb != null && `${s.weight_lb}lb`}
+                        {s.weight_lb != null && s.reps != null && ' × '}
+                        {s.reps != null && `${s.reps}`}
+                        {s.rpe != null && <span className="text-amber-300/70">@{s.rpe}</span>}
+                        <Edit3 size={9} className="text-white/30 ml-0.5" />
+                      </button>
                     ))}
                   </div>
                 </CardContent>
@@ -287,65 +322,91 @@ function ActiveWorkoutInner() {
       {/* Exercise + sets entry */}
       <Card className="border-white/10 bg-white/5">
         <CardContent className="pt-4 space-y-3">
-          <div className="relative">
-            <label className="text-xs text-white/50 uppercase tracking-wider">Exercise</label>
-            <input
-              ref={inputRef}
-              value={exerciseName}
-              onChange={(e) => { setExerciseName(e.target.value); setShowSuggestions(true) }}
-              onFocus={() => setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              placeholder="Bench Press, Squat, Pull-up…"
-              className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
-            />
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 z-20 max-h-44 overflow-y-auto rounded-md border border-white/10 bg-zinc-950 shadow-lg">
-                {suggestions.map((s) => (
-                  <button
-                    key={s}
-                    onMouseDown={(e) => { e.preventDefault(); setExerciseName(s); setShowSuggestions(false) }}
-                    className="block w-full text-left px-3 py-1.5 text-sm text-white/80 hover:bg-white/10"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
+          {/* Exercise picker trigger */}
+          <div>
+            <label className="text-[10px] text-white/50 uppercase tracking-wider">Exercise</label>
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-3 text-sm focus:outline-none focus:border-amber-400/50 hover:border-amber-400/30 text-left flex items-center justify-between gap-2"
+            >
+              {exerciseName ? (
+                <span className="text-white font-medium">{exerciseName}</span>
+              ) : (
+                <span className="text-white/40">Tap to pick · Bench, RDL, Hack squat…</span>
+              )}
+              <Dumbbell size={14} className="text-amber-400/70 flex-shrink-0" />
+            </button>
           </div>
 
+          {/* Set entry — 2-col Weight + Reps, RPE behind toggle */}
           <div className="space-y-2">
-            <div className="grid grid-cols-[1.4rem_1fr_1fr_1fr_1.7rem] gap-1.5 text-[10px] uppercase tracking-wider text-white/40">
-              <span>#</span>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Sets</p>
+              <button
+                onClick={() => setShowRpe((s) => !s)}
+                className="text-[10px] uppercase tracking-wider text-white/40 hover:text-white/80 flex items-center gap-1"
+              >
+                {showRpe ? <><ChevronUp size={10} /> Hide RPE</> : <><ChevronDown size={10} /> Show RPE</>}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowRpeInfo((v) => !v) }}
+                  className="ml-0.5 text-white/30 hover:text-amber-300"
+                >
+                  <Info size={10} />
+                </button>
+              </button>
+            </div>
+            {showRpeInfo && (
+              <p className="text-[10px] text-amber-200/70 bg-amber-400/[0.05] border border-amber-400/20 rounded p-2 leading-relaxed">
+                <span className="font-bold">RPE = Rate of Perceived Exertion (1-10).</span> How hard the set felt. 10 = absolute max, 9 = 1 rep in reserve, 8 = 2 RIR, 7 = 3 RIR. Optional — only track it if you find it useful.
+              </p>
+            )}
+            <div className="grid grid-cols-[1.4rem_1fr_1fr_1.7rem] gap-2 text-[10px] uppercase tracking-wider text-white/40">
+              <span className="text-center">#</span>
               <span>Weight (lb)</span>
               <span>Reps</span>
-              <span>RPE</span>
               <span />
             </div>
             {draftSets.map((d, i) => (
-              <div key={i} className="grid grid-cols-[1.4rem_1fr_1fr_1fr_1.7rem] gap-1.5 items-center">
-                <span className="text-white/40 text-xs font-mono">{nextSetNumber + i}</span>
-                <input
-                  type="number" inputMode="decimal" value={d.weight_lb}
-                  onChange={(e) => updateDraftSet(i, 'weight_lb', e.target.value)}
-                  className="bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:border-amber-400/50"
-                />
-                <input
-                  type="number" inputMode="numeric" value={d.reps}
-                  onChange={(e) => updateDraftSet(i, 'reps', e.target.value)}
-                  className="bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:border-amber-400/50"
-                />
-                <input
-                  type="number" inputMode="decimal" step="0.5" min="1" max="10" value={d.rpe}
-                  onChange={(e) => updateDraftSet(i, 'rpe', e.target.value)}
-                  className="bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:border-amber-400/50"
-                />
-                <button
-                  onClick={() => removeDraftRow(i)}
-                  className="text-white/30 hover:text-rose-400 disabled:opacity-30 flex justify-center"
-                  disabled={draftSets.length === 1}
-                >
-                  <X size={14} />
-                </button>
+              <div key={i} className="space-y-1.5">
+                <div className="grid grid-cols-[1.4rem_1fr_1fr_1.7rem] gap-2 items-center">
+                  <span className="text-white/40 text-xs font-mono tabular-nums text-center">{nextSetNumber + i}</span>
+                  <input
+                    type="number" inputMode="decimal" value={d.weight_lb}
+                    onChange={(e) => updateDraftSet(i, 'weight_lb', e.target.value)}
+                    onBlur={(e) => updateDraftSet(i, 'weight_lb', e.target.value)}
+                    placeholder="0"
+                    className="bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
+                  />
+                  <input
+                    type="number" inputMode="numeric" value={d.reps}
+                    onChange={(e) => updateDraftSet(i, 'reps', e.target.value)}
+                    onBlur={(e) => updateDraftSet(i, 'reps', e.target.value)}
+                    placeholder="0"
+                    className="bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
+                  />
+                  <button
+                    onClick={() => removeDraftRow(i)}
+                    className="text-white/30 hover:text-rose-400 disabled:opacity-30 flex justify-center"
+                    disabled={draftSets.length === 1}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                {showRpe && (
+                  <div className="grid grid-cols-[1.4rem_1fr_1.7rem] gap-2 items-center pl-0">
+                    <span />
+                    <div className="relative">
+                      <input
+                        type="number" inputMode="decimal" step="0.5" min="1" max="10" value={d.rpe}
+                        onChange={(e) => updateDraftSet(i, 'rpe', e.target.value)}
+                        onBlur={(e) => updateDraftSet(i, 'rpe', e.target.value)}
+                        placeholder="RPE 1-10"
+                        className="w-full bg-white/[0.03] border border-white/10 rounded-md px-2 py-1.5 text-xs tabular-nums focus:outline-none focus:border-amber-400/40 text-amber-200/80"
+                      />
+                    </div>
+                    <span />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -361,7 +422,7 @@ function ActiveWorkoutInner() {
             <Button
               onClick={saveExercise}
               disabled={savingExercise || !exerciseName.trim()}
-              className="flex-1 bg-amber-400 text-black hover:bg-amber-300 disabled:opacity-30"
+              className="flex-1 bg-amber-400 text-black hover:bg-amber-300 disabled:opacity-30 font-bold"
             >
               {savingExercise ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Check size={14} className="mr-1" />}
               Save Exercise
@@ -381,12 +442,19 @@ function ActiveWorkoutInner() {
         <div className="max-w-md mx-auto pointer-events-auto">
           <Button
             onClick={() => setShowEnd(true)}
-            className="w-full bg-rose-500 text-white hover:bg-rose-400 shadow-lg shadow-rose-500/30"
+            className="w-full bg-rose-500 text-white hover:bg-rose-400 shadow-lg shadow-rose-500/30 h-12"
           >
             <Square size={14} className="mr-2" /> End Session
           </Button>
         </div>
       </div>
+
+      <ExercisePicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={(name) => setExerciseName(name)}
+        recentNames={previousExercises}
+      />
 
       {showEnd && session && sessionId && (
         <EndSessionDialog
@@ -396,6 +464,85 @@ function ActiveWorkoutInner() {
           onFinished={() => router.push(`/workout/summary?session=${sessionId}`)}
         />
       )}
+
+      {editingSet && (
+        <EditSetDialog
+          set={editingSet}
+          onClose={() => setEditingSet(null)}
+          onSave={(patch) => saveEditedSet(editingSet, patch)}
+          onDelete={() => { deleteSet(editingSet.id); setEditingSet(null) }}
+        />
+      )}
+    </div>
+  )
+}
+
+function EditSetDialog({
+  set, onClose, onSave, onDelete,
+}: {
+  set: SetRow
+  onClose: () => void
+  onSave: (patch: { weight_lb: number | null; reps: number | null; rpe: number | null }) => void
+  onDelete: () => void
+}) {
+  const [weight, setWeight] = useState(set.weight_lb != null ? String(set.weight_lb) : '')
+  const [reps, setReps] = useState(set.reps != null ? String(set.reps) : '')
+  const [rpe, setRpe] = useState(set.rpe != null ? String(set.rpe) : '')
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
+      <Card className="border-white/10 bg-zinc-950 w-full max-w-md">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-white">Edit set #{set.set_number} — {set.exercise_name}</h2>
+            <button onClick={onClose}><X size={20} className="text-white/40" /></button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-white/40">Weight (lb)</label>
+              <input
+                type="number" inputMode="decimal" value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                onBlur={(e) => setWeight(e.target.value)}
+                className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-white/40">Reps</label>
+              <input
+                type="number" inputMode="numeric" value={reps}
+                onChange={(e) => setReps(e.target.value)}
+                onBlur={(e) => setReps(e.target.value)}
+                className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-white/40">RPE</label>
+              <input
+                type="number" inputMode="decimal" step="0.5" min="1" max="10" value={rpe}
+                onChange={(e) => setRpe(e.target.value)}
+                onBlur={(e) => setRpe(e.target.value)}
+                className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2 border-t border-white/5">
+            <Button onClick={onDelete} variant="outline" className="border-rose-400/30 text-rose-300 hover:bg-rose-500/10">
+              <Trash2 size={12} className="mr-1" /> Delete
+            </Button>
+            <Button
+              onClick={() => onSave({
+                weight_lb: weight ? Number(weight) : null,
+                reps: reps ? Number(reps) : null,
+                rpe: rpe ? Number(rpe) : null,
+              })}
+              className="ml-auto bg-amber-400 text-black hover:bg-amber-300 font-bold"
+            >
+              <Check size={12} className="mr-1" /> Save
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -409,22 +556,74 @@ function EndSessionDialog({
   onFinished: () => void
 }) {
   const [energyPost, setEnergyPost] = useState<number>(session.energy_pre || 7)
-  const [moodPost, setMoodPost] = useState('')
+  const [moodChips, setMoodChips] = useState<string[]>([])
   const [notes, setNotes] = useState('')
+  const [voiceListening, setVoiceListening] = useState(false)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  const [voiceInterim, setVoiceInterim] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const recognitionRef = useRef<VJWRecognizer | null>(null)
+
+  useEffect(() => {
+    const win = (typeof window !== 'undefined' ? window : null) as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown } | null
+    setVoiceSupported(!!(win?.SpeechRecognition || win?.webkitSpeechRecognition))
+  }, [])
+
+  function toggleMoodChip(c: string) {
+    setMoodChips((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c])
+  }
+  function addNoteChip(c: string) {
+    setNotes((prev) => prev ? `${prev}\n${c}` : c)
+  }
+
+  function startVoice() {
+    setError(null)
+    const win = window as unknown as { SpeechRecognition?: new () => VJWRecognizer; webkitSpeechRecognition?: new () => VJWRecognizer }
+    const Ctor = win.SpeechRecognition || win.webkitSpeechRecognition
+    if (!Ctor) { setError('Voice not supported'); return }
+    const rec: VJWRecognizer = new Ctor()
+    rec.continuous = true
+    rec.interimResults = true
+    rec.lang = 'en-US'
+    rec.onresult = (e: VJWREvent) => {
+      let finalText = ''
+      let interimText = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const result = e.results[i]
+        if (result.isFinal) finalText += result[0].transcript
+        else interimText += result[0].transcript
+      }
+      if (finalText) setNotes((t) => (t + ' ' + finalText).trim())
+      setVoiceInterim(interimText)
+    }
+    rec.onerror = (e: { error: string }) => {
+      if (e.error !== 'no-speech') setError(`Voice: ${e.error}`)
+      setVoiceListening(false)
+    }
+    rec.onend = () => { setVoiceListening(false); setVoiceInterim('') }
+    recognitionRef.current = rec
+    try { rec.start(); setVoiceListening(true) } catch (e) { setError(e instanceof Error ? e.message : 'Mic error') }
+  }
+
+  function stopVoice() {
+    recognitionRef.current?.stop()
+    setVoiceListening(false)
+    setVoiceInterim('')
+  }
 
   async function finish() {
     setSaving(true)
     setError(null)
     try {
+      const moodSummary = moodChips.length > 0 ? moodChips.join(', ') : null
       const { error: updErr } = await supabase
         .from('workout_sessions')
         .update({
           ended_at: new Date().toISOString(),
           energy_post: energyPost,
-          mood_post: moodPost || null,
-          notes: notes || null,
+          mood_post: moodSummary,
+          notes: notes.trim() || null,
         })
         .eq('id', sessionId)
       if (updErr) throw new Error(updErr.message)
@@ -436,22 +635,23 @@ function EndSessionDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
-      <Card className="border-white/10 bg-zinc-950 w-full max-w-md">
+    <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4 overflow-y-auto">
+      <Card className="border-white/10 bg-zinc-950 w-full max-w-md max-h-[92vh] overflow-y-auto my-auto">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold">Finish session</h2>
+            <h2 className="font-bold text-white">Finish session</h2>
             <button onClick={onClose}><X size={20} className="text-white/40" /></button>
           </div>
 
+          {/* Energy post */}
           <div>
-            <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Energy post (1-10)</p>
-            <div className="flex gap-1">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+            <p className="text-white/50 text-[10px] uppercase tracking-wider mb-1.5">Energy after (1-10)</p>
+            <div className="grid grid-cols-10 gap-1">
+              {[1,2,3,4,5,6,7,8,9,10].map((n) => (
                 <button
                   key={n}
                   onClick={() => setEnergyPost(n)}
-                  className={`flex-1 py-1.5 rounded text-xs font-bold transition-colors ${
+                  className={`py-2 rounded text-xs font-bold transition-colors tabular-nums ${
                     energyPost === n ? 'bg-amber-400 text-black' : 'bg-white/5 text-white/40 hover:bg-white/10'
                   }`}
                 >{n}</button>
@@ -459,22 +659,74 @@ function EndSessionDialog({
             </div>
           </div>
 
+          {/* Mood chips — quick tap, multi-select */}
           <div>
-            <label className="text-xs text-white/50 uppercase tracking-wider">Mood</label>
-            <input
-              value={moodPost} onChange={(e) => setMoodPost(e.target.value)}
-              placeholder="Strong, drained, dialed, flat…"
-              className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm"
-            />
+            <p className="text-white/50 text-[10px] uppercase tracking-wider mb-1.5">How did it feel? (tap any that apply)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {MOOD_CHIPS.map((c) => {
+                const on = moodChips.includes(c)
+                return (
+                  <button
+                    key={c}
+                    onClick={() => toggleMoodChip(c)}
+                    className={`text-xs px-2.5 py-1.5 rounded-md border transition-colors ${
+                      on
+                        ? 'bg-amber-400/20 border-amber-400/50 text-amber-200 font-semibold'
+                        : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
+          {/* Notes with voice */}
           <div>
-            <label className="text-xs text-white/50 uppercase tracking-wider">Notes</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-white/50 text-[10px] uppercase tracking-wider">Notes — talk it through</p>
+              {voiceSupported && (
+                voiceListening ? (
+                  <motion.button
+                    onClick={stopVoice}
+                    className="text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md bg-rose-500/20 border border-rose-400/40 text-rose-200 flex items-center gap-1"
+                  >
+                    <motion.div
+                      className="w-1.5 h-1.5 rounded-full bg-rose-400"
+                      animate={{ scale: [1, 1.4, 1], opacity: [0.6, 1, 0.6] }}
+                      transition={{ duration: 1, repeat: Infinity }}
+                    />
+                    <MicOff size={11} /> Stop
+                  </motion.button>
+                ) : (
+                  <button
+                    onClick={startVoice}
+                    className="text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md bg-violet-400/20 border border-violet-400/40 text-violet-200 hover:bg-violet-400/30 flex items-center gap-1"
+                  >
+                    <Mic size={11} /> Talk
+                  </button>
+                )
+              )}
+            </div>
             <Textarea
-              value={notes} onChange={(e) => setNotes(e.target.value)}
-              placeholder="PRs, technique notes, pains, conditions…"
-              className="bg-white/5 border-white/10 mt-1"
+              value={notes + (voiceInterim ? (notes ? ' ' : '') + voiceInterim : '')}
+              onChange={(e) => { setNotes(e.target.value); setVoiceInterim('') }}
+              placeholder={voiceListening ? 'Listening — speak about how it went…' : 'What felt good · what was off · PRs · injuries · the vibe'}
+              className="bg-white/5 border-white/10 min-h-[100px]"
             />
+            {/* Quick note chips */}
+            <div className="flex flex-wrap gap-1 mt-2">
+              {NOTE_QUICK_CHIPS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => addNoteChip(c)}
+                  className="text-[10px] px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 hover:text-white/80"
+                >
+                  + {c}
+                </button>
+              ))}
+            </div>
           </div>
 
           {error && (
@@ -486,10 +738,10 @@ function EndSessionDialog({
           <Button
             onClick={finish}
             disabled={saving}
-            className="w-full bg-green-400 text-black hover:bg-green-300"
+            className="w-full bg-green-400 text-black hover:bg-green-300 h-11 font-bold"
           >
-            {saving ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Check size={14} className="mr-2" />}
-            Finish
+            {saving ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Sparkles size={14} className="mr-2" />}
+            Finish session
           </Button>
         </CardContent>
       </Card>
