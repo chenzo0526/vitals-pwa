@@ -98,6 +98,7 @@ export async function GET(req: NextRequest) {
       recentCheckinsRes,
       recentBiometricsRes,
       dismissalsRes,
+      workoutSetsRes,
     ] = await Promise.all([
       supabase.from('onboarding_progress').select('identity_data, rhythm_data, first_goal, thirty_day_checkpoint').eq('user_id', userId).maybeSingle(),
       supabase.from('substances').select('*').eq('user_id', userId).eq('active', true),
@@ -105,7 +106,7 @@ export async function GET(req: NextRequest) {
       supabase.from('bloodwork_markers').select('*, bloodwork_panels(drawn_on, panel_name)').eq('user_id', userId).order('panel_id'),
       supabase.from('intake_events').select('item, qty_text, calories, protein_g, carbs_g, fat_g, ts').eq('user_id', userId).gte('ts', sevenDaysAgoIso).order('ts', { ascending: false }).limit(50),
       supabase.from('workout_sessions').select('id, focus, scheduled_at, energy_pre').eq('user_id', userId).is('started_at', null).not('scheduled_at', 'is', null).gte('scheduled_at', nowIso).lte('scheduled_at', fortyEightHoursAheadIso).order('scheduled_at', { ascending: true }),
-      supabase.from('workout_sessions').select('focus, started_at, ended_at, energy_pre, energy_post').eq('user_id', userId).not('started_at', 'is', null).gte('started_at', sevenDaysAgoIso).order('started_at', { ascending: false }).limit(10),
+      supabase.from('workout_sessions').select('id, focus, started_at, ended_at, energy_pre, energy_post').eq('user_id', userId).not('started_at', 'is', null).gte('started_at', sevenDaysAgoIso).order('started_at', { ascending: false }).limit(10),
       supabase.from('physique_snapshots').select('ts, bf_percent_estimate, analysis_json').eq('user_id', userId).order('ts', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('daily_summary').select('*').eq('user_id', userId).eq('date', todayLocal).maybeSingle(),
       supabase
@@ -139,6 +140,15 @@ export async function GET(req: NextRequest) {
         .gt('dismissed_until', new Date().toISOString())
         .order('dismissed_until', { ascending: false })
         .limit(30),
+      // Actual logged sets from the last 7 days — exercise names + load. THIS is what makes
+      // training advice accurate (without it the coach only sees the session 'focus' label).
+      supabase
+        .from('workout_sets')
+        .select('session_id, exercise_name, set_number, weight_lb, reps, rpe, created_at')
+        .eq('user_id', userId)
+        .gte('created_at', sevenDaysAgoIso)
+        .order('created_at', { ascending: true })
+        .limit(300),
     ])
 
     const identity = (onboardingRes.data?.identity_data || {}) as Record<string, unknown>
@@ -215,13 +225,34 @@ export async function GET(req: NextRequest) {
         when: w.scheduled_at,
         planned_energy: w.energy_pre,
       })),
-      recent_workouts_last_7d: (recentWorkoutsRes.data || []).map((w) => ({
-        focus: w.focus,
-        started_at: w.started_at,
-        ended_at: w.ended_at,
-        energy_pre: w.energy_pre,
-        energy_post: w.energy_post,
-      })),
+      recent_workouts_last_7d: (recentWorkoutsRes.data || []).map((w) => {
+        // Pull this session's actual logged sets, grouped by exercise.
+        const sessionSets = ((workoutSetsRes.data || []) as Array<{
+          session_id: string; exercise_name: string; set_number: number;
+          weight_lb: number | null; reps: number | null; rpe: number | null
+        }>).filter((s) => s.session_id === (w as { id: string }).id)
+        const byExercise: Record<string, Array<{ set: number; weight_lb: number | null; reps: number | null; rpe: number | null }>> = {}
+        for (const s of sessionSets) {
+          const key = s.exercise_name?.trim() || 'Unnamed'
+          if (!byExercise[key]) byExercise[key] = []
+          byExercise[key].push({ set: s.set_number, weight_lb: s.weight_lb, reps: s.reps, rpe: s.rpe })
+        }
+        const exercises = Object.entries(byExercise).map(([name, sets]) => ({
+          exercise: name,
+          sets: sets.length,
+          top_set: sets.reduce((best, cur) =>
+            (cur.weight_lb ?? 0) > (best.weight_lb ?? 0) ? cur : best, sets[0]),
+          all_sets: sets,
+        }))
+        return {
+          focus: w.focus,
+          started_at: w.started_at,
+          ended_at: w.ended_at,
+          energy_pre: w.energy_pre,
+          energy_post: w.energy_post,
+          exercises_logged: exercises, // ACTUAL exercises — use these, do NOT infer from focus alone
+        }
+      }),
       latest_physique: latestPhysiqueRes.data
         ? {
             ts: latestPhysiqueRes.data.ts,
