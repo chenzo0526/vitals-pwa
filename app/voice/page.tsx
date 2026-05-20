@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { supabase, getCurrentUserId } from '@/lib/supabase'
 import { useToast } from '@/components/Toast'
 import { celebrateConfetti } from '@/lib/confetti'
+import { resolveLogDate, readDateParamFromUrl } from '@/lib/logDate'
+import LogDateBanner from '@/components/LogDateBanner'
 
 type ParsedItem = {
   name: string
@@ -40,6 +42,7 @@ export default function VoicePage() {
   const [parsed, setParsed] = useState<Parsed | null>(null)
   const [loading, setLoading] = useState(false)
   const [logging, setLogging] = useState(false)
+  const [logCtx] = useState(() => resolveLogDate(readDateParamFromUrl()))
   const [logged, setLogged] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -161,7 +164,7 @@ export default function VoicePage() {
     const totals = p.total_macros || sumMacros(p.items)
     const waterTotal = (totals.water_ml ?? p.items.reduce((s, i) => s + (i.water_ml || 0), 0)) || 0
     const { error: insertErr } = await supabase.from('intake_events').insert({
-      ts: new Date().toISOString(),
+      ts: logCtx.ts,
       item: p.items.map((i) => i.name).join(', '),
       qty_text: p.items
         .map((i) => `${i.quantity || ''}${i.unit ? ' ' + i.unit : ''} ${i.name}`.trim())
@@ -215,6 +218,7 @@ export default function VoicePage() {
         <h1 className="text-xl font-bold text-white">Log Voice</h1>
         <Badge variant="outline" className="border-violet-400/30 text-violet-400 text-xs">AI Parse</Badge>
       </div>
+      <LogDateBanner dateStr={logCtx.dateStr} isToday={logCtx.isToday} />
 
       {/* Record control */}
       <div className="flex flex-col items-center gap-3 py-4">

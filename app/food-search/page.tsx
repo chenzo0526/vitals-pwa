@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/components/Toast'
 import { celebrate } from '@/lib/celebrate'
+import { resolveLogDate, readDateParamFromUrl } from '@/lib/logDate'
+import LogDateBanner from '@/components/LogDateBanner'
 
 type FoodResult = {
   fdc_id: number
@@ -40,6 +42,7 @@ export default function FoodSearchPage() {
   const [selected, setSelected] = useState<FoodResult | null>(null)
   const [servings, setServings] = useState<number>(1)
   const [logging, setLogging] = useState(false)
+  const [logCtx] = useState(() => resolveLogDate(readDateParamFromUrl()))
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Debounced search
@@ -80,7 +83,7 @@ export default function FoodSearchPage() {
       const mult = Math.max(0.1, servings || 1)
       const { error: insErr } = await supabase.from('intake_events').insert({
         user_id: userId,
-        ts: new Date().toISOString(),
+        ts: logCtx.ts,
         item: selected.name,
         qty_text: `${servings} × ${selected.per_amount}`,
         calories: Math.round(selected.calories * mult),
@@ -107,6 +110,7 @@ export default function FoodSearchPage() {
       <Link href="/" className="text-xs text-white/40 hover:text-white/70 flex items-center gap-1">
         <ChevronLeft size={12} /> Home
       </Link>
+      <LogDateBanner dateStr={logCtx.dateStr} isToday={logCtx.isToday} />
 
       <div>
         <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">

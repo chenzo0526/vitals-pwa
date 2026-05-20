@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { supabase, getCurrentUserId } from '@/lib/supabase'
+import { resolveLogDate, readDateParamFromUrl } from '@/lib/logDate'
+import LogDateBanner from '@/components/LogDateBanner'
 import { useToast } from '@/components/Toast'
 import { compressImage, formatBytes } from '@/lib/images'
 import { celebrateConfetti } from '@/lib/confetti'
@@ -36,6 +38,7 @@ export default function FoodPage() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
   const [stage, setStage] = useState<'idle' | 'compressing' | 'analyzing' | 'done' | 'error'>('idle')
   const [logging, setLogging] = useState(false)
+  const [logCtx] = useState(() => resolveLogDate(readDateParamFromUrl()))
   const [logged, setLogged] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<number | null>(null)
@@ -108,7 +111,7 @@ export default function FoodPage() {
     const totals = a.total_macros || recompute(a.items)
     const waterTotal = (totals.water_ml ?? a.items.reduce((s, i) => s + (i.water_ml || 0), 0)) || 0
     const { error: insertErr } = await supabase.from('intake_events').insert({
-      ts: new Date().toISOString(),
+      ts: logCtx.ts,
       item: a.items.map((i) => i.name).join(', '),
       qty_text: a.items.map((i) => `${i.qty_estimate} ${i.name}`).join(', '),
       calories: totals.calories,
@@ -174,6 +177,7 @@ export default function FoodPage() {
 
   return (
     <div className="px-4 pt-6 pb-32 space-y-4">
+      <LogDateBanner dateStr={logCtx.dateStr} isToday={logCtx.isToday} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight text-white">Snap Plate</h1>
         <Badge variant="outline" className="border-amber-400/30 text-amber-400 text-xs">AI Vision</Badge>

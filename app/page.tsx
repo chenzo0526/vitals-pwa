@@ -11,6 +11,7 @@ import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Act
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 import { celebrate } from '@/lib/celebrate'
+import { yesterdayStr } from '@/lib/logDate'
 import { Skeleton, SkeletonCard } from '@/components/Skeleton'
 import CoachInsightCard from '@/components/CoachInsightCard'
 import { computeCalorieTarget } from '@/lib/calorieTarget'
@@ -441,6 +442,20 @@ export default function HomePage() {
 
       {/* AI Coach — daily cross-data intelligence. The WOW card. */}
       {!needsOnboarding && <CoachInsightCard />}
+
+      {/* Forgot to log yesterday? One-tap catch-up. Keeps the coach's data honest. */}
+      {!needsOnboarding && (
+        <Link
+          href={`/food-search?date=${yesterdayStr()}`}
+          className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 hover:bg-white/[0.06] transition-colors active:scale-[0.99]"
+        >
+          <div className="flex items-center gap-2.5">
+            <Calendar size={15} className="text-white/40" />
+            <span className="text-xs text-white/60">Forgot to log yesterday? <span className="text-white/80 font-semibold">Catch up</span></span>
+          </div>
+          <ChevronRight size={14} className="text-white/30" />
+        </Link>
+      )}
 
       {/* Calorie hero — personalized target, with remaining/over indicator */}
       {loading ? (

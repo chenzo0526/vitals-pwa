@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation'
 import { supabase, PracticeSession, PRACTICE_CATEGORY_COLORS, getCurrentUserId } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { Sparkles, Plus, X, Flame, Wind, Sun, Footprints, Brain, HeartHandshake } from 'lucide-react'
+import { Sparkles, X, Flame, Wind, Sun, Footprints, Brain, HeartHandshake } from 'lucide-react'
 import { EmptyState } from '@/components/EmptyState'
 import { SkeletonRow } from '@/components/Skeleton'
+import { resolveLogDate, readDateParamFromUrl } from '@/lib/logDate'
+import LogDateBanner from '@/components/LogDateBanner'
 
 const CATEGORIES = [
   { key: 'thermal', label: 'Thermal', icon: Flame, types: ['Sauna', 'Cold plunge', 'Ice bath', 'Infrared', 'Contrast'] },
@@ -27,6 +28,7 @@ export default function PracticesPage() {
   const [logging, setLogging] = useState<PracticeSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [logCtx] = useState(() => resolveLogDate(readDateParamFromUrl()))
 
   useEffect(() => { load() }, [])
 
@@ -78,6 +80,7 @@ export default function PracticesPage() {
         </h1>
         <p className="text-xs text-white/40 mt-0.5">Non-substance interventions</p>
       </div>
+      <LogDateBanner dateStr={logCtx.dateStr} isToday={logCtx.isToday} />
 
       {/* Quick-log grid */}
       <div className="grid grid-cols-2 gap-2">
@@ -87,7 +90,7 @@ export default function PracticesPage() {
             onClick={() => setLogging({
               category: key as PracticeSession['category'],
               practice_type: '',
-              ts: new Date().toISOString(),
+              ts: logCtx.ts,
             })}
             className={`p-3 rounded-xl border text-left transition-all active:scale-95 ${PRACTICE_CATEGORY_COLORS[key]}`}
           >

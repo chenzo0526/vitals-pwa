@@ -7,6 +7,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
 import { supabase, getCurrentUserId } from '@/lib/supabase'
+import { resolveLogDate, readDateParamFromUrl } from '@/lib/logDate'
+import LogDateBanner from '@/components/LogDateBanner'
 import { Toast, ToastMsg } from '@/components/Toast'
 
 type LabelData = {
@@ -28,6 +30,7 @@ export default function LabelPage() {
   const [label, setLabel] = useState<LabelData | null>(null)
   const [loading, setLoading] = useState(false)
   const [logging, setLogging] = useState(false)
+  const [logCtx] = useState(() => resolveLogDate(readDateParamFromUrl()))
   const [logged, setLogged] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastMsg | null>(null)
@@ -75,7 +78,7 @@ export default function LabelPage() {
         return
       }
       const { error: insertErr } = await supabase.from('intake_events').insert({
-        ts: new Date().toISOString(),
+        ts: logCtx.ts,
         item: label.product_name,
         qty_text: label.serving_size,
         calories: label.calories,
@@ -100,6 +103,7 @@ export default function LabelPage() {
 
   return (
     <div className="px-4 pt-6 space-y-4">
+      <LogDateBanner dateStr={logCtx.dateStr} isToday={logCtx.isToday} />
       <Toast msg={toast} onDismiss={() => setToast(null)} />
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Scan Label</h1>

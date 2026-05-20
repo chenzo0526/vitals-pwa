@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Home, FlaskConical, Sparkles, MoreHorizontal, Plus, Camera, Mic, ScanLine, Dumbbell, TrendingUp, X, Search } from 'lucide-react'
+import { todayStr, yesterdayStr, logDateLabel } from '@/lib/logDate'
+import { Home, FlaskConical, Sparkles, MoreHorizontal, Plus, Camera, Mic, Dumbbell, TrendingUp, X, Search, CalendarDays } from 'lucide-react'
 
 const TABS = [
   { href: '/', icon: Home, label: 'Home' },
@@ -31,6 +32,7 @@ export default function BottomNav() {
   const pathname = usePathname()
   const router = useRouter()
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [logDate, setLogDate] = useState<string>(todayStr())
 
   if (
     pathname === '/login' ||
@@ -40,6 +42,7 @@ export default function BottomNav() {
 
   function open() {
     haptic()
+    setLogDate(todayStr())
     setSheetOpen(true)
   }
 
@@ -50,7 +53,8 @@ export default function BottomNav() {
   function go(href: string) {
     haptic()
     setSheetOpen(false)
-    router.push(href)
+    const url = logDate && logDate !== todayStr() ? `${href}?date=${logDate}` : href
+    router.push(url)
   }
 
   return (
@@ -87,6 +91,44 @@ export default function BottomNav() {
                     <X size={16} />
                   </button>
                 </div>
+
+                {/* Date selector — log to a past day if you forgot */}
+                <div className="flex items-center gap-1.5 mb-3">
+                  <CalendarDays size={13} className="text-white/30 flex-shrink-0" />
+                  <button
+                    onClick={() => setLogDate(todayStr())}
+                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-md border transition-colors ${
+                      logDate === todayStr()
+                        ? 'bg-amber-400/15 border-amber-400/40 text-amber-200'
+                        : 'border-white/10 text-white/50 hover:text-white/80'
+                    }`}
+                  >
+                    Today
+                  </button>
+                  <button
+                    onClick={() => setLogDate(yesterdayStr())}
+                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-md border transition-colors ${
+                      logDate === yesterdayStr()
+                        ? 'bg-amber-400/15 border-amber-400/40 text-amber-200'
+                        : 'border-white/10 text-white/50 hover:text-white/80'
+                    }`}
+                  >
+                    Yesterday
+                  </button>
+                  <input
+                    type="date"
+                    max={todayStr()}
+                    value={logDate}
+                    onChange={(e) => e.target.value && setLogDate(e.target.value)}
+                    className="text-[11px] bg-black/30 border border-white/10 rounded-md px-2 py-1 text-white/70 focus:outline-none focus:border-amber-400/40 ml-auto"
+                    aria-label="Pick a date to log to"
+                  />
+                </div>
+                {logDate !== todayStr() && (
+                  <p className="text-[10px] text-amber-300/80 mb-2 -mt-1">
+                    Logging to <span className="font-bold">{logDateLabel(logDate)}</span> — pick Today to switch back.
+                  </p>
+                )}
                 <div className="grid grid-cols-3 gap-2">
                   {LOG_OPTIONS.map((opt, i) => (
                     <motion.button
@@ -113,7 +155,6 @@ export default function BottomNav() {
         className={`fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/95 backdrop-blur-xl safe-bottom transition-opacity ${
           sheetOpen ? 'pointer-events-none opacity-0' : 'opacity-100'
         }`}
-        style={{ transform: 'translateZ(0)', willChange: 'transform', WebkitTransform: 'translateZ(0)' }}
       >
         <div className="max-w-md mx-auto relative flex items-center justify-around px-1 py-2">
           {TABS.slice(0, 2).map((t) => <Tab key={t.href} {...t} active={isActive(pathname, t.href)} />)}
