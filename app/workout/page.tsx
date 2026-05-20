@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Play, Loader2, Calendar, Clock, Trash2 } from 'lucide-react'
+import { Play, Loader2, Calendar, Clock, Trash2, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { supabase } from '@/lib/supabase'
@@ -14,6 +14,8 @@ type ScheduledWorkout = {
   focus: string | null
   scheduled_at: string
 }
+
+type OpenSession = { id: string; focus: string | null; started_at: string }
 
 type Mode = 'now' | 'later'
 
@@ -39,6 +41,7 @@ export default function WorkoutPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [upcoming, setUpcoming] = useState<ScheduledWorkout[]>([])
+  const [openSession, setOpenSession] = useState<OpenSession | null>(null)
 
   // Auto-end any of this user's STARTED workout_sessions that have been open >6 hours.
   // Scheduled-but-not-started rows are NOT auto-ended (started_at is null on those).
@@ -82,6 +85,26 @@ export default function WorkoutPage() {
   }
 
   useEffect(() => { loadUpcoming() }, [])
+
+  // Detect an in-progress session so we can offer RESUME instead of starting a duplicate.
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+      const { data } = await supabase
+        .from('workout_sessions')
+        .select('id, focus, started_at')
+        .eq('user_id', user.id)
+        .is('ended_at', null)
+        .not('started_at', 'is', null)
+        .gte('started_at', sixHoursAgoIso)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (data) setOpenSession(data as OpenSession)
+    })()
+  }, [])
 
   async function submit() {
     setSubmitting(true)
@@ -184,6 +207,32 @@ export default function WorkoutPage() {
   return (
     <div className="px-4 pt-6 space-y-4 pb-8">
       <h1 className="text-2xl font-bold tracking-tight text-white">Workout</h1>
+
+      {/* In-progress session — resume instead of starting a duplicate */}
+      {openSession && (
+        <Card className="border-emerald-400/40 bg-emerald-500/10">
+          <CardContent className="p-3.5 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-emerald-100 flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                </span>
+                Workout in progress
+              </p>
+              <p className="text-[11px] text-emerald-200/70 mt-0.5 truncate">
+                {openSession.focus || 'Session'} · started {new Date(openSession.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+              </p>
+            </div>
+            <Button
+              onClick={() => router.push(`/workout/active?session=${openSession.id}`)}
+              className="bg-emerald-400 text-black hover:bg-emerald-300 flex-shrink-0 h-9"
+            >
+              <RotateCcw size={14} className="mr-1.5" /> Resume
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Mode toggle */}
       <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 border border-white/10 rounded-lg">

@@ -23,6 +23,31 @@ async function getSupabase() {
   )
 }
 
+// List the user's currently-active snoozes (for the manage/un-snooze UI).
+export async function GET() {
+  try {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+
+    const { data, error } = await supabase
+      .from('coach_insight_dismissals')
+      .select('topic_key, topic_title, dismissed_until')
+      .eq('user_id', user.id)
+      .gt('dismissed_until', new Date().toISOString())
+      .order('dismissed_until', { ascending: false })
+      .limit(50)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ snoozed: data || [] })
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'Failed to load snoozes' },
+      { status: 500 }
+    )
+  }
+}
+
 // Snooze a coach insight topic for N days (default 7). Upserts on (user_id, topic_key).
 export async function POST(req: Request) {
   try {

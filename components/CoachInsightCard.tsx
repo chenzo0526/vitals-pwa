@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
-import { Sparkles, Loader2, RefreshCw, AlertTriangle, ChevronRight, Brain, Dumbbell, FlaskConical, Heart, Apple, Camera, Activity, BellOff, Check } from 'lucide-react'
+import { Sparkles, Loader2, RefreshCw, AlertTriangle, ChevronRight, Brain, Dumbbell, FlaskConical, Heart, Apple, Camera, Activity, BellOff, Check, Bell } from 'lucide-react'
 
 type InsightType = 'nutrition' | 'training' | 'protocol' | 'recovery' | 'bloodwork' | 'body_comp' | 'general'
 
@@ -59,6 +59,33 @@ export default function CoachInsightCard() {
   const [expanded, setExpanded] = useState<number | null>(0) // first card expanded by default
   const [snoozing, setSnoozing] = useState<string | null>(null)
   const [snoozed, setSnoozed] = useState<Set<string>>(new Set())
+  const [pausedList, setPausedList] = useState<Array<{ topic_key: string; topic_title: string; dismissed_until: string }>>([])
+  const [showPaused, setShowPaused] = useState(false)
+  const [unsnoozing, setUnsnoozing] = useState<string | null>(null)
+
+  async function loadPaused() {
+    try {
+      const res = await fetch('/api/coach-dismiss')
+      if (res.ok) {
+        const j = await res.json()
+        setPausedList(j.snoozed || [])
+      }
+    } catch { /* non-critical */ }
+  }
+
+  async function unsnoozeTopic(topicKey: string) {
+    if (unsnoozing) return
+    setUnsnoozing(topicKey)
+    try {
+      const res = await fetch(`/api/coach-dismiss?topic_key=${encodeURIComponent(topicKey)}`, { method: 'DELETE' })
+      if (res.ok) {
+        setPausedList((list) => list.filter((p) => p.topic_key !== topicKey))
+        setSnoozed((set) => { const n = new Set(set); n.delete(topicKey); return n })
+      }
+    } catch { /* user can retry */ } finally {
+      setUnsnoozing(null)
+    }
+  }
 
   async function snoozeTopic(topicKey: string, topicTitle: string) {
     if (!topicKey || snoozing) return
@@ -71,6 +98,11 @@ export default function CoachInsightCard() {
       })
       if (res.ok) {
         setSnoozed((s) => new Set(s).add(topicKey))
+        const until = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        setPausedList((list) => {
+          if (list.some((p) => p.topic_key === topicKey)) return list
+          return [{ topic_key: topicKey, topic_title: topicTitle, dismissed_until: until }, ...list]
+        })
       }
     } catch {
       // silent — user can retry
@@ -96,7 +128,7 @@ export default function CoachInsightCard() {
     }
   }
 
-  useEffect(() => { fetchCoach(false) }, [])
+  useEffect(() => { fetchCoach(false); loadPaused() }, [])
 
   // No insights state — first-time user with no data yet
   const hasInsights = data?.insights && data.insights.length > 0
@@ -214,9 +246,18 @@ export default function CoachInsightCard() {
                             )}
                             <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-end">
                               {snoozed.has(topicKey) ? (
-                                <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-300 inline-flex items-center gap-1">
-                                  <Check size={11} /> Got it — paused 7 days
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-300 inline-flex items-center gap-1">
+                                    <Check size={11} /> Paused 7 days
+                                  </span>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); unsnoozeTopic(topicKey) }}
+                                    disabled={unsnoozing === topicKey}
+                                    className="text-[10px] uppercase tracking-wider font-bold text-white/40 hover:text-white/80 disabled:opacity-50 underline underline-offset-2"
+                                  >
+                                    Undo
+                                  </button>
+                                </div>
                               ) : (
                                 <button
                                   onClick={(e) => {
@@ -244,6 +285,38 @@ export default function CoachInsightCard() {
                 </button>
               )
             })}
+          </div>
+        )}
+
+        {/* Paused topics manager — un-snooze anything you muted */}
+        {pausedList.length > 0 && (
+          <div className="pt-1 border-t border-white/5">
+            <button
+              onClick={() => setShowPaused((v) => !v)}
+              className="w-full flex items-center justify-between text-[10px] uppercase tracking-wider text-white/40 hover:text-white/70 py-1"
+            >
+              <span className="inline-flex items-center gap-1">
+                <BellOff size={11} /> Paused topics ({pausedList.length})
+              </span>
+              <ChevronRight size={11} className={`transition-transform ${showPaused ? 'rotate-90' : ''}`} />
+            </button>
+            {showPaused && (
+              <div className="space-y-1 mt-1">
+                {pausedList.map((p) => (
+                  <div key={p.topic_key} className="flex items-center justify-between gap-2 rounded-md bg-white/[0.03] border border-white/5 px-2 py-1.5">
+                    <span className="text-[11px] text-white/60 truncate">{p.topic_title}</span>
+                    <button
+                      onClick={() => unsnoozeTopic(p.topic_key)}
+                      disabled={unsnoozing === p.topic_key}
+                      className="text-[10px] uppercase tracking-wider font-bold text-amber-300/80 hover:text-amber-200 disabled:opacity-50 inline-flex items-center gap-1 flex-shrink-0"
+                    >
+                      {unsnoozing === p.topic_key ? <Loader2 size={10} className="animate-spin" /> : <Bell size={10} />}
+                      Resume
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
