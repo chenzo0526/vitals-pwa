@@ -183,7 +183,7 @@ export default function BloodworkPanelDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-full flex items-center justify-center">
         <Loader2 size={20} className="animate-spin text-rose-400" />
       </div>
     )

@@ -165,7 +165,7 @@ export default function HistoryDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-full flex items-center justify-center">
         <Loader2 size={20} className="animate-spin text-amber-400" />
       </div>
     )

@@ -289,7 +289,7 @@ export default function OnboardingPage() {
 
   if (resuming) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-full flex items-center justify-center">
         <Loader2 className="animate-spin text-amber-400" size={20} />
       </div>
     )
@@ -722,7 +722,7 @@ function FinishedScreen({ onContinue }: { onContinue: () => void }) {
   const showInstallHelp = platform === 'ios-safari' || platform === 'android'
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center py-12">
+    <div className="min-h-full flex flex-col items-center justify-center px-6 text-center py-12">
       <motion.div
         initial={{ scale: 0 }} animate={{ scale: 1 }}
         transition={{ type: 'spring', stiffness: 200, damping: 12 }}

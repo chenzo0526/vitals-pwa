@@ -152,7 +152,7 @@ export default function BottomNav() {
       </AnimatePresence>
 
       <nav
-        className={`fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/95 backdrop-blur-xl safe-bottom transition-opacity ${
+        className={`flex-shrink-0 relative z-50 border-t border-white/10 bg-black/95 backdrop-blur-xl safe-bottom transition-opacity ${
           sheetOpen ? 'pointer-events-none opacity-0' : 'opacity-100'
         }`}
       >

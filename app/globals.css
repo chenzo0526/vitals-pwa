@@ -66,17 +66,19 @@ input:not(:-webkit-autofill) { animation-name: onAutoFillCancel; }
 
   html {
     height: 100%;
-    /* Stop the whole-page rubber-band bounce that lifts fixed elements off the bottom on iOS. */
-    overscroll-behavior-y: none;
+    overscroll-behavior: none;
   }
 
+  /* The document itself never scrolls — the app shell (<main>) owns scrolling.
+     This is what truly pins the bottom nav on iOS: no body scroll = nothing for
+     a fixed/positioned element to detach from during momentum scroll. */
   body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
     background-color: oklch(0.12 0 0);
     color: oklch(0.97 0 0);
     background-image: radial-gradient(ellipse at 50% 0%, oklch(0.18 0.05 280 / 60%) 0%, oklch(0.12 0 0) 70%);
-    min-height: 100vh;            /* fallback for old browsers */
-    min-height: 100dvh;          /* dynamic viewport — matches visual viewport on iOS so fixed bottom anchors correctly */
-    overscroll-behavior-y: none;  /* belt-and-suspenders: no bounce on body either */
-    background-attachment: fixed; /* gradient doesn't scroll, avoids repaint jank under the nav */
+    background-attachment: fixed;
   }
 }
