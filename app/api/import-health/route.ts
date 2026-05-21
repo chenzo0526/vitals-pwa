@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServiceRoleClient } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -147,19 +147,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing X-Vitals-Token header or ?token= query' }, { status: 401 })
     }
 
-    const admin = getServiceRoleClient()
-
-    // Look up user by token
-    const { data: tokenRow, error: tokenErr } = await admin
-      .from('import_tokens')
-      .select('user_id')
-      .eq('token', token)
-      .maybeSingle()
-    if (tokenErr || !tokenRow) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-    }
-    const userId = tokenRow.user_id
-
     const payload = await req.json() as ImportPayload
 
     let entries: DirectEntry[] = []
@@ -175,52 +162,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, imported: 0, message: 'No data in payload' })
     }
 
-    let imported = 0
-    let failed = 0
-    for (const e of entries) {
-      if (!e.for_date) { failed++; continue }
-      const row = {
-        user_id: userId,
-        for_date: e.for_date,
-        source: (e.source || 'apple_health') as 'apple_health' | 'whoop' | 'oura' | 'fitbit' | 'garmin' | 'manual' | 'other',
-        hrv_rmssd: e.hrv_rmssd ?? null,
-        rhr_bpm: e.rhr_bpm ?? null,
-        sleep_total_min: e.sleep_total_min ?? null,
-        sleep_deep_min: e.sleep_deep_min ?? null,
-        sleep_rem_min: e.sleep_rem_min ?? null,
-        sleep_light_min: e.sleep_light_min ?? null,
-        sleep_awake_min: e.sleep_awake_min ?? null,
-        sleep_efficiency_pct: e.sleep_efficiency_pct ?? null,
-        steps: e.steps ?? null,
-        active_calories: e.active_calories ?? null,
-        total_calories: e.total_calories ?? null,
-        recovery_score: e.recovery_score ?? null,
-        strain_score: e.strain_score ?? null,
-        readiness_score: e.readiness_score ?? null,
-        body_temp_c: e.body_temp_c ?? null,
-        spo2_pct: e.spo2_pct ?? null,
-        respiratory_rate: e.respiratory_rate ?? null,
-        notes: e.notes ?? null,
-      }
-      const { error: upErr } = await admin
-        .from('biometric_entries')
-        .upsert(row, { onConflict: 'user_id,for_date,source' })
-      if (upErr) {
-        console.error('[import-health] upsert failed:', upErr.message, 'row:', row)
-        failed++
-      } else {
-        imported++
-      }
+    // Write via a SECURITY DEFINER RPC. The function validates the token, resolves the
+    // user, and upserts — all server-side with elevated privileges — so this route only
+    // needs the public anon key (no SUPABASE_SERVICE_ROLE_KEY env dependency).
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    )
+
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('import_biometrics', {
+      p_token: token,
+      p_entries: entries,
+    })
+
+    if (rpcErr) {
+      console.error('[import-health] rpc failed:', rpcErr.message)
+      return NextResponse.json({ error: rpcErr.message }, { status: 500 })
     }
 
-    // Update token last-used timestamp. (Increment counter is best-effort; supabase-js can't do raw increment in a single update,
-    // so we just bump last_used_at here and skip the counter — non-critical.)
-    await admin
-      .from('import_tokens')
-      .update({ last_used_at: new Date().toISOString() })
-      .eq('user_id', userId)
+    const result = (rpcData || {}) as { error?: string; imported?: number; failed?: number }
+    if (result.error) {
+      // Invalid/missing token surfaces here from the function.
+      const status = result.error.toLowerCase().includes('token') ? 401 : 400
+      return NextResponse.json({ error: result.error }, { status })
+    }
 
-    return NextResponse.json({ ok: true, imported, failed, total: entries.length })
+    return NextResponse.json({
+      ok: true,
+      imported: result.imported ?? 0,
+      failed: result.failed ?? 0,
+      total: entries.length,
+    })
   } catch (err) {
     console.error('[import-health] error:', err)
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Import failed' }, { status: 500 })
