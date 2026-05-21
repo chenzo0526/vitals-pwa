@@ -7,6 +7,9 @@ const PUBLIC_PATHS = [
   '/terms',
   '/privacy',
   '/api/stripe/webhook',
+  // Token-authenticated machine endpoints — these auth via their own token (X-Vitals-Token
+  // / ?token=), NOT a session cookie. Must bypass the login redirect or external POSTs 405.
+  '/api/import-health',
 ]
 
 const PUBLIC_PREFIXES = [
