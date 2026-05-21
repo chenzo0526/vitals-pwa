@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import {
   Heart, Activity, Moon, Loader2, ChevronLeft, AlertTriangle, Check, RefreshCw, History,
   Plus, Trash2, Edit3, TrendingUp, TrendingDown, Smartphone, Copy, ClipboardCheck, Eye, EyeOff,
+  Footprints, Flame,
 } from 'lucide-react'
 
 type BiometricEntry = {
@@ -22,6 +23,7 @@ type BiometricEntry = {
   sleep_rem_min: number | null
   sleep_efficiency_pct: number | null
   steps: number | null
+  active_calories: number | null
   recovery_score: number | null
   strain_score: number | null
   readiness_score: number | null
@@ -245,7 +247,7 @@ export default function RecoveryPage() {
             <Heart className="text-rose-400" size={20} /> Recovery
           </h1>
           <p className="text-[11px] text-white/50 mt-0.5">
-            HRV, RHR, sleep. Coach reads this. WHOOP/Apple Health connector coming.
+            HRV, RHR, sleep, steps, move calories. Coach reads all of it. Apple Watch auto-sync is live.
           </p>
         </div>
         <Button
@@ -313,7 +315,7 @@ export default function RecoveryPage() {
               Quick-log HRV, RHR, and sleep from your wearable (WHOOP / Oura / Apple Watch / Garmin). The AI Coach reads these to spot overtraining, undersleep, and stress patterns before they catch up to you.
             </p>
             <p className="text-xs text-white/60 leading-relaxed">
-              Auto-sync coming soon. For now: open your wearable's app, glance at today's numbers, tap <strong className="text-rose-300">Log</strong> above. 15 seconds, done.
+              Auto-sync is live via Apple Watch. You can also hand-log anytime: glance at your wearable, tap <strong className="text-rose-300">Log</strong> above. 15 seconds, done.
             </p>
           </CardContent>
         </Card>
@@ -346,6 +348,12 @@ export default function RecoveryPage() {
               )}
               {latest.rhr_bpm != null && (
                 <Metric label="RHR" value={String(latest.rhr_bpm)} unit="bpm" icon={Heart} color="text-rose-300" trend={trendIcon(latest.rhr_bpm, previous?.rhr_bpm ?? null)} />
+              )}
+              {latest.steps != null && (
+                <Metric label="Steps" value={latest.steps.toLocaleString()} unit="" icon={Footprints} color="text-sky-300" trend={trendIcon(latest.steps, previous?.steps ?? null)} />
+              )}
+              {latest.active_calories != null && (
+                <Metric label="Move" value={latest.active_calories.toLocaleString()} unit="kcal" icon={Flame} color="text-orange-300" trend={trendIcon(latest.active_calories, previous?.active_calories ?? null)} />
               )}
               {latest.sleep_total_min != null && (
                 <Metric label="Sleep" value={(latest.sleep_total_min / 60).toFixed(1)} unit="h" icon={Moon} color="text-indigo-300" trend={trendIcon(latest.sleep_total_min, previous?.sleep_total_min ?? null)} />
@@ -381,9 +389,11 @@ export default function RecoveryPage() {
                   <p className="text-xs font-bold text-white tabular-nums">{e.for_date}</p>
                   <p className="text-[10px] text-white/50">{SOURCE_LABELS[e.source]}</p>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] text-white/60 flex-shrink-0">
+                <div className="flex items-center gap-2 text-[10px] text-white/60 flex-shrink-0 flex-wrap justify-end">
                   {e.hrv_rmssd != null && <span className="tabular-nums">HRV {e.hrv_rmssd.toFixed(0)}</span>}
                   {e.rhr_bpm != null && <span className="tabular-nums">RHR {e.rhr_bpm}</span>}
+                  {e.steps != null && <span className="tabular-nums text-sky-300/80">{(e.steps/1000).toFixed(1)}k steps</span>}
+                  {e.active_calories != null && <span className="tabular-nums text-orange-300/80">{e.active_calories} kcal</span>}
                   {e.sleep_total_min != null && <span className="tabular-nums">{(e.sleep_total_min/60).toFixed(1)}h</span>}
                 </div>
                 <button onClick={() => openEdit(e)} className="p-1.5 rounded-md text-white/40 hover:text-white/80"><Edit3 size={10} /></button>

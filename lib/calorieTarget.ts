@@ -12,8 +12,8 @@ export type CalorieTargetInputs = {
   height_cm: number | null
   training_days_per_week: number | null
   goal: CalorieGoal
-  /** Optional: rolling 7-day avg of total_calories from wearable (Apple Watch / Whoop). Overrides activity-multiplier TDEE when present. */
-  wearable_tdee_kcal?: number | null
+  /** Optional: rolling avg of daily ACTIVE (move) calories from wearable. TDEE = BMR + this. More robust than Apple's flaky total-energy figure. */
+  wearable_active_kcal?: number | null
 }
 
 export type CalorieTargetResult = {
@@ -83,11 +83,14 @@ export function computeCalorieTarget(input: CalorieTargetInputs): CalorieTargetR
 
   const activity = activityFromTrainingDays(training_days_per_week)
   const formulaTDEE = bmr * ACTIVITY_MULTIPLIERS[activity]
-  // If we have a real wearable-measured TDEE (and it's in a plausible band), use it.
-  // Otherwise fall back to BMR × activity multiplier.
-  const wearable = input.wearable_tdee_kcal
-  const usingWearable = !!wearable && wearable >= bmr * 1.0 && wearable <= bmr * 3.0
-  const tdee = usingWearable ? wearable! : formulaTDEE
+  // Wearable path: TDEE = computed BMR + measured active (move) calories. We use our own
+  // BMR (Mifflin) rather than Apple's resting-energy figure, which double-counts. Clamp
+  // active to a sane ceiling so a bad import day can't blow up the target.
+  const activeAvg = input.wearable_active_kcal
+  const clampedActive = activeAvg != null ? Math.max(0, Math.min(2500, activeAvg)) : null
+  const wearableTDEE = clampedActive != null ? Math.round(bmr + clampedActive) : null
+  const usingWearable = !!wearableTDEE && wearableTDEE >= bmr * 1.0 && wearableTDEE <= bmr * 3.0
+  const tdee = usingWearable ? wearableTDEE! : formulaTDEE
   const tdeeSource: 'wearable' | 'formula' = usingWearable ? 'wearable' : 'formula'
   const delta = GOAL_DELTA[goal]
   const target = Math.round(tdee + delta)
@@ -127,7 +130,7 @@ export function computeCalorieTarget(input: CalorieTargetInputs): CalorieTargetR
     carbs_g_target,
     fat_g_target,
     rationale: usingWearable
-      ? `Wearable 7-day avg = ${Math.round(tdee)} kcal TDEE. ${goalLabel[goal]} = ${target} kcal/day target.`
+      ? `BMR ${Math.round(bmr)} + ${clampedActive} active (Apple Watch avg) = ${Math.round(tdee)} kcal TDEE. ${goalLabel[goal]} = ${target} kcal/day target.`
       : `BMR ${Math.round(bmr)} × ${ACTIVITY_MULTIPLIERS[activity]} (${activity.replace('_', ' ')}) = ${Math.round(tdee)} kcal TDEE. ${goalLabel[goal]} = ${target} kcal/day target.`,
     activity_level: activity,
     is_complete: true,

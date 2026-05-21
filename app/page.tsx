@@ -110,7 +110,7 @@ export default function HomePage() {
             ? supabase.from('onboarding_progress').select('identity_data, rhythm_data, first_goal').eq('user_id', uid).maybeSingle()
             : Promise.resolve({ data: null }),
           uid
-            ? supabase.from('biometric_entries').select('total_calories, for_date').eq('user_id', uid).not('total_calories', 'is', null).gte('for_date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)).order('for_date', { ascending: false }).limit(7)
+            ? supabase.from('biometric_entries').select('active_calories, for_date').eq('user_id', uid).not('active_calories', 'is', null).gte('for_date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)).order('for_date', { ascending: false }).limit(7)
             : Promise.resolve({ data: null }),
         ])
 
@@ -146,16 +146,17 @@ export default function HomePage() {
         const identity = (onboardingDataRes.data?.identity_data || {}) as Record<string, unknown>
         const rhythm = (onboardingDataRes.data?.rhythm_data || {}) as Record<string, unknown>
         const inferredGoal = inferCalorieGoalFromText(onboardingDataRes.data?.first_goal ?? null)
-        // Roll up wearable TDEE from last 7 days of total_calories when available.
-        // Skip today's row if it's the only one (incomplete day) — prefer yesterday + earlier.
-        const biometricRows = ((biometricsRes as { data?: Array<{ total_calories: number | null; for_date: string }> | null })?.data) || []
-        let wearableTdee: number | null = null
+        // Roll up average daily ACTIVE (move) calories from the wearable. TDEE is then
+        // computed as BMR + this avg (robust vs Apple's double-counted total energy).
+        // Skip today (incomplete day). Clamp per-day to ignore obvious double-count spikes.
+        const biometricRows = ((biometricsRes as { data?: Array<{ active_calories: number | null; for_date: string }> | null })?.data) || []
+        let wearableActive: number | null = null
         if (biometricRows.length > 0) {
           const todayStr = new Date().toISOString().slice(0, 10)
-          const eligible = biometricRows.filter((r) => r.total_calories && r.total_calories > 800 && r.for_date !== todayStr)
+          const eligible = biometricRows.filter((r) => r.active_calories != null && r.active_calories > 50 && r.for_date !== todayStr)
           if (eligible.length >= 1) {
-            const sum = eligible.reduce((a, r) => a + (r.total_calories || 0), 0)
-            wearableTdee = Math.round(sum / eligible.length)
+            const sum = eligible.reduce((a, r) => a + Math.min(2500, r.active_calories || 0), 0)
+            wearableActive = Math.round(sum / eligible.length)
           }
         }
         const target = computeCalorieTarget({
@@ -165,7 +166,7 @@ export default function HomePage() {
           height_cm: identity.height_cm ? Number(identity.height_cm) : null,
           training_days_per_week: rhythm.training_days_per_week ? Number(rhythm.training_days_per_week) : null,
           goal: inferredGoal,
-          wearable_tdee_kcal: wearableTdee,
+          wearable_active_kcal: wearableActive,
         })
         setCalTarget(target)
       } finally {
@@ -636,14 +637,12 @@ export default function HomePage() {
               {calTarget.tdee_source === 'wearable' ? (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-white/60">Source</span>
-                    <span className="text-emerald-300 font-mono tabular-nums inline-flex items-center gap-1">
-                      Apple Watch · 7-day avg
-                    </span>
+                    <span className="text-white/60">BMR (resting burn)</span>
+                    <span className="text-white font-mono tabular-nums">{calTarget.bmr.toLocaleString()} kcal</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-white/60">BMR (reference)</span>
-                    <span className="text-white/60 font-mono tabular-nums">{calTarget.bmr.toLocaleString()} kcal</span>
+                    <span className="text-white/60">+ Active (Apple Watch avg)</span>
+                    <span className="text-emerald-300 font-mono tabular-nums">{Math.max(0, calTarget.tdee - calTarget.bmr).toLocaleString()} kcal</span>
                   </div>
                   <div className="border-t border-white/10 pt-2 flex items-center justify-between">
                     <span className="text-white/60">= TDEE (measured)</span>
