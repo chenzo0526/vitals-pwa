@@ -118,8 +118,14 @@ function normalizeHAE(metrics: HAEMetric[]): DirectEntry[] {
       } else if (name === 'step_count' || name === 'steps') {
         if (qty != null) entry.steps = (entry.steps || 0) + Math.round(Number(qty))
       } else if (name === 'active_energy' || name.includes('active energy')) {
-        if (qty != null) entry.active_calories = (entry.active_calories || 0) + Math.round(Number(qty))
-      } else if (name === 'basal_energy_burned' || name.includes('basal energy')) {
+        // Active burn counts toward BOTH active_calories and total daily energy.
+        if (qty != null) {
+          const v = Math.round(Number(qty))
+          entry.active_calories = (entry.active_calories || 0) + v
+          entry.total_calories = (entry.total_calories || 0) + v
+        }
+      } else if (name === 'basal_energy_burned' || name.includes('basal energy') || name.includes('resting energy')) {
+        // Basal/resting burn is the other half of total daily energy (TDEE = active + basal).
         if (qty != null) entry.total_calories = (entry.total_calories || 0) + Math.round(Number(qty))
       } else if (name === 'respiratory_rate') {
         if (qty != null) entry.respiratory_rate = Number(qty)
