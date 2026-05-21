@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle, Calendar, Dumbbell, Plus, Loader2, Info, X } from 'lucide-react'
+import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle, Calendar, Dumbbell, Plus, Loader2, Info, X, Heart } from 'lucide-react'
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 import { celebrate } from '@/lib/celebrate'
@@ -36,6 +36,7 @@ type Today = {
 }
 
 type OpenWorkout = { id: string; focus: string | null; started_at: string }
+type BioSnapshot = { for_date: string; hrv_rmssd: number | null; rhr_bpm: number | null; sleep_total_min: number | null; steps: number | null; active_calories: number | null }
 type NextScheduledWorkout = { id: string; focus: string | null; scheduled_at: string }
 
 type BaselineStatus = {
@@ -56,6 +57,7 @@ export default function HomePage() {
   const [baseline, setBaseline] = useState<BaselineStatus>({ hasPhysique: false, hasSubstances: false, hasBloodwork: false })
   const [addingWater, setAddingWater] = useState<number | null>(null)  // ml of pending add for the spinner
   const [calTarget, setCalTarget] = useState<CalorieTargetResult | null>(null)
+  const [bio, setBio] = useState<BioSnapshot | null>(null)
   const [showCalMath, setShowCalMath] = useState(false)
 
   useEffect(() => {
@@ -67,7 +69,7 @@ export default function HomePage() {
 
         const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
         const nowIso = new Date().toISOString()
-        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, onboardingDataRes, biometricsRes] = await Promise.all([
+        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, onboardingDataRes, biometricsRes, bioLatestRes] = await Promise.all([
           supabase.from('daily_summary').select('*').eq('date', dateStr).maybeSingle(),
           uid
             ? supabase.from('user_profile').select('*').eq('id', uid).maybeSingle()
@@ -111,6 +113,9 @@ export default function HomePage() {
             : Promise.resolve({ data: null }),
           uid
             ? supabase.from('biometric_entries').select('active_calories, for_date').eq('user_id', uid).not('active_calories', 'is', null).gte('for_date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)).order('for_date', { ascending: false }).limit(7)
+            : Promise.resolve({ data: null }),
+          uid
+            ? supabase.from('biometric_entries').select('for_date, hrv_rmssd, rhr_bpm, sleep_total_min, steps, active_calories').eq('user_id', uid).order('for_date', { ascending: false }).limit(1).maybeSingle()
             : Promise.resolve({ data: null }),
         ])
 
@@ -169,6 +174,9 @@ export default function HomePage() {
           wearable_active_kcal: wearableActive,
         })
         setCalTarget(target)
+        if (bioLatestRes && (bioLatestRes as { data?: BioSnapshot | null }).data) {
+          setBio((bioLatestRes as { data: BioSnapshot }).data)
+        }
       } finally {
         setLoading(false)
       }
@@ -443,6 +451,40 @@ export default function HomePage() {
 
       {/* AI Coach — daily cross-data intelligence. The WOW card. */}
       {!needsOnboarding && <CoachInsightCard />}
+
+      {/* Recovery snapshot — your body data, front and center. Taps through to full Recovery. */}
+      {!needsOnboarding && bio && (bio.hrv_rmssd != null || bio.rhr_bpm != null || bio.steps != null || bio.sleep_total_min != null || bio.active_calories != null) && (
+        <Link href="/recovery" className="block">
+          <Card className="border-rose-400/20 bg-gradient-to-br from-rose-500/[0.05] to-cyan-500/[0.03] hover:brightness-110 transition-all active:scale-[0.99]">
+            <CardContent className="p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-wider font-bold text-rose-300 flex items-center gap-1.5">
+                  <Heart size={11} /> Recovery · {bio.for_date}
+                </p>
+                <ChevronRight size={13} className="text-white/30" />
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="text-center">
+                  <p className="text-[9px] uppercase tracking-wider text-white/40">HRV</p>
+                  <p className="text-sm font-bold text-cyan-300 tabular-nums leading-tight">{bio.hrv_rmssd != null ? Math.round(bio.hrv_rmssd) : '—'}<span className="text-[9px] text-white/30 font-normal"> ms</span></p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[9px] uppercase tracking-wider text-white/40">RHR</p>
+                  <p className="text-sm font-bold text-rose-300 tabular-nums leading-tight">{bio.rhr_bpm != null ? bio.rhr_bpm : '—'}<span className="text-[9px] text-white/30 font-normal"> bpm</span></p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[9px] uppercase tracking-wider text-white/40">Sleep</p>
+                  <p className="text-sm font-bold text-indigo-300 tabular-nums leading-tight">{bio.sleep_total_min != null ? (bio.sleep_total_min/60).toFixed(1) : '—'}<span className="text-[9px] text-white/30 font-normal"> h</span></p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[9px] uppercase tracking-wider text-white/40">Steps</p>
+                  <p className="text-sm font-bold text-sky-300 tabular-nums leading-tight">{bio.steps != null ? (bio.steps/1000).toFixed(1) : '—'}<span className="text-[9px] text-white/30 font-normal"> k</span></p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       {/* Forgot to log yesterday? One-tap catch-up. Keeps the coach's data honest. */}
       {!needsOnboarding && (
