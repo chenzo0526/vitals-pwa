@@ -22,6 +22,7 @@ type FoodResult = {
   category: string | null
   per_amount: string
   is_branded_serving: boolean
+  estimated?: boolean
   calories: number
   protein_g: number
   carbs_g: number
@@ -160,7 +161,9 @@ export default function FoodSearchPage() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-white">{r.name}</p>
+                  <p className="text-sm font-medium text-white">{r.name}
+                    {r.estimated && <span className="ml-1.5 text-[9px] uppercase tracking-wider px-1 py-0.5 rounded bg-violet-400/15 border border-violet-400/30 text-violet-300 align-middle">≈ AI estimate</span>}
+                  </p>
                   <p className="text-[10px] text-white/40 mt-0.5">
                     Per {r.per_amount}
                     {r.category && ` · ${r.category}`}

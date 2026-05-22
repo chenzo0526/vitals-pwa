@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -45,6 +46,47 @@ function pickNutrient(nutrients: Array<{ nutrientId: number; value: number }> | 
   return n?.value ?? 0
 }
 
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' })
+
+// Fallback when USDA is rate-limited (DEMO_KEY) or returns nothing: estimate macros with Claude.
+// Returns up to 3 plausible matches per 100g (or a sensible serving) so search never hard-fails.
+async function estimateFoodWithClaude(query: string) {
+  try {
+    const resp = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 700,
+      temperature: 0.2,
+      system: 'You are a nutrition database. Given a food query, return ONLY valid JSON: {"results":[{"name":string,"per_amount":string (e.g. "100g" or "1 scoop (30g)"),"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"water_ml":number}]}. 1-3 best matches. Realistic macros. No prose.',
+      messages: [{ role: 'user', content: `Food query: "${query}"` }],
+    })
+    const c = resp.content[0]
+    const txt = c.type === 'text' ? c.text : ''
+    const m = txt.match(/\{[\s\S]*\}/)
+    if (!m) return []
+    const parsed = JSON.parse(m[0]) as { results?: Array<Record<string, unknown>> }
+    return (parsed.results || []).slice(0, 3).map((r, i) => ({
+      fdc_id: -1 - i,
+      name: String(r.name || query),
+      brand: null,
+      category: null,
+      per_amount: String(r.per_amount || '100g'),
+      is_branded_serving: false,
+      calories: Math.round(Number(r.calories) || 0),
+      protein_g: Math.round((Number(r.protein_g) || 0) * 10) / 10,
+      carbs_g: Math.round((Number(r.carbs_g) || 0) * 10) / 10,
+      fat_g: Math.round((Number(r.fat_g) || 0) * 10) / 10,
+      fiber_g: 0,
+      sugar_g: 0,
+      sodium_mg: 0,
+      water_ml: Math.round(Number(r.water_ml) || 0),
+      estimated: true,
+    }))
+  } catch (e) {
+    console.error('[search-food] claude fallback failed:', e)
+    return []
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url)
@@ -61,6 +103,10 @@ export async function GET(req: NextRequest) {
     if (!res.ok) {
       const txt = await res.text()
       console.error('[search-food] USDA error:', res.status, txt.slice(0, 200))
+      const estimated = await estimateFoodWithClaude(query)
+      if (estimated.length > 0) {
+        return NextResponse.json({ ok: true, results: estimated, count: estimated.length, source: 'estimated' })
+      }
       return NextResponse.json({ error: 'Food database unavailable. Try again in a minute.' }, { status: 502 })
     }
     const data = (await res.json()) as FdcSearchResult
@@ -89,6 +135,13 @@ export async function GET(req: NextRequest) {
         water_ml: Math.round(pickNutrient(nutrients, NUTRIENT_IDS.water_ml)),
       }
     })
+
+    if (results.length === 0) {
+      const estimated = await estimateFoodWithClaude(query)
+      if (estimated.length > 0) {
+        return NextResponse.json({ ok: true, results: estimated, count: estimated.length, source: 'estimated' })
+      }
+    }
 
     return NextResponse.json({ ok: true, results, count: results.length })
   } catch (err) {
