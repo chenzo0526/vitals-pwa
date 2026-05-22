@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle, Calendar, Dumbbell, Plus, Loader2, Info, X, Heart } from 'lucide-react'
+import { Zap, Beef, Wheat, Droplet, Droplets, Brain, FlaskConical, Sparkles, Activity, ChevronRight, Camera, CheckCircle2, Circle, Calendar, Dumbbell, Plus, Loader2, Info, X, Heart, Clock, Trash2, Utensils } from 'lucide-react'
 import { UserProfile, isTrialing, trialDaysLeft } from '@/lib/tier'
 import { getLocalDateString, getUserTimezone } from '@/lib/dates'
 import { celebrate } from '@/lib/celebrate'
@@ -37,6 +37,7 @@ type Today = {
 
 type OpenWorkout = { id: string; focus: string | null; started_at: string }
 type BioSnapshot = { for_date: string; hrv_rmssd: number | null; rhr_bpm: number | null; sleep_total_min: number | null; steps: number | null; active_calories: number | null }
+type IntakeItem = { id: string; item: string; calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null; water_ml: number | null; ts: string }
 type NextScheduledWorkout = { id: string; focus: string | null; scheduled_at: string }
 
 type BaselineStatus = {
@@ -59,6 +60,8 @@ export default function HomePage() {
   const [calTarget, setCalTarget] = useState<CalorieTargetResult | null>(null)
   const [bio, setBio] = useState<BioSnapshot | null>(null)
   const [showCalMath, setShowCalMath] = useState(false)
+  const [todayItems, setTodayItems] = useState<IntakeItem[]>([])
+  const [logSheet, setLogSheet] = useState<null | 'calories' | 'protein' | 'carbs' | 'fat'>(null)
 
   useEffect(() => {
     async function fetchAll() {
@@ -66,6 +69,7 @@ export default function HomePage() {
         const dateStr = getLocalDateString()
         const { data: { user } } = await supabase.auth.getUser()
         const uid = user?.id
+        if (uid) loadTodayItems(uid)
 
         const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
         const nowIso = new Date().toISOString()
@@ -209,6 +213,33 @@ export default function HomePage() {
     } finally {
       setAddingWater(null)
     }
+  }
+
+  async function loadTodayItems(userId: string) {
+    const startIso = new Date(`${getLocalDateString()}T00:00:00`).toISOString()
+    const { data } = await supabase
+      .from('intake_events')
+      .select('id, item, calories, protein_g, carbs_g, fat_g, water_ml, ts')
+      .eq('user_id', userId)
+      .gte('ts', startIso)
+      .order('ts', { ascending: false })
+    if (data) setTodayItems(data as IntakeItem[])
+  }
+
+  async function deleteIntake(id: string) {
+    const prev = todayItems
+    setTodayItems((items) => items.filter((i) => i.id !== id)) // optimistic
+    const { error } = await supabase.from('intake_events').delete().eq('id', id)
+    if (error) { setTodayItems(prev); return }
+    // recompute today's totals from the remaining items (trigger also updates daily_summary)
+    const remaining = prev.filter((i) => i.id !== id)
+    setToday((t) => ({
+      ...t,
+      calories_total: remaining.reduce((a, i) => a + (i.calories || 0), 0),
+      protein_g_total: remaining.reduce((a, i) => a + (i.protein_g || 0), 0),
+      carbs_g_total: remaining.reduce((a, i) => a + (i.carbs_g || 0), 0),
+      fat_g_total: remaining.reduce((a, i) => a + (i.fat_g || 0), 0),
+    }))
   }
 
   async function endOpenWorkout() {
@@ -521,7 +552,7 @@ export default function HomePage() {
       {loading ? (
         <SkeletonCard />
       ) : (
-        <Card className="border-white/10 bg-white/5">
+        <Card onClick={() => setLogSheet('calories')} className="border-white/10 bg-white/5 cursor-pointer hover:bg-white/[0.07] transition-colors active:scale-[0.99]">
           <CardContent className="pt-5 pb-4 space-y-2">
             <div className="flex items-center justify-between">
               <div>
@@ -595,8 +626,10 @@ export default function HomePage() {
                 </CardContent>
               </Card>
             ))
-          : macros.map(({ label, value, goal, unit, icon: Icon, color }) => (
-              <Card key={label} className="border-white/10 bg-white/5">
+          : macros.map(({ label, value, goal, unit, icon: Icon, color }) => {
+              const sheetKey = label === 'Protein' ? 'protein' : label === 'Carbs' ? 'carbs' : label === 'Fat' ? 'fat' : null
+              return (
+              <Card key={label} onClick={() => sheetKey && setLogSheet(sheetKey)} className={`border-white/10 bg-white/5 ${sheetKey ? 'cursor-pointer hover:bg-white/[0.07] transition-colors active:scale-[0.99]' : ''}`}>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-white/50 text-xs">{label}</span>
@@ -613,7 +646,8 @@ export default function HomePage() {
                   <p className="text-[10px] text-white/30 mt-1">goal: {goal}{unit}</p>
                 </CardContent>
               </Card>
-            ))}
+              )
+            })}
       </div>
 
       {/* Quick water log — one tap, no forms */}
@@ -664,6 +698,60 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+
+      {/* Today's log quick-view — tap a macro/calorie card to see + manage what's logged */}
+      {logSheet && (
+        <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-end justify-center" onClick={() => setLogSheet(null)}>
+          <motion.div
+            initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-zinc-950 border-t border-x border-white/10 rounded-t-3xl p-4 space-y-3 max-h-[80vh] overflow-y-auto safe-bottom"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-white flex items-center gap-1.5"><Utensils size={14} className="text-amber-400" /> Logged today</p>
+                <p className="text-[10px] text-white/40">
+                  {logSheet === 'calories' && `${today.calories_total.toLocaleString()} kcal total`}
+                  {logSheet === 'protein' && `${today.protein_g_total.toFixed(0)}g protein total`}
+                  {logSheet === 'carbs' && `${today.carbs_g_total.toFixed(0)}g carbs total`}
+                  {logSheet === 'fat' && `${today.fat_g_total.toFixed(0)}g fat total`}
+                  {' · tap trash to remove a mistake'}
+                </p>
+              </div>
+              <button onClick={() => setLogSheet(null)} className="text-white/40 hover:text-white/80 p-1.5"><X size={18} /></button>
+            </div>
+
+            {todayItems.filter((i) => i.item !== 'Water').length === 0 ? (
+              <p className="text-xs text-white/40 text-center py-6">Nothing logged yet today. Tap the + or Ask Vitals to log a meal.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {todayItems.filter((i) => i.item !== 'Water').map((i) => {
+                  const macroVal = logSheet === 'protein' ? i.protein_g : logSheet === 'carbs' ? i.carbs_g : logSheet === 'fat' ? i.fat_g : i.calories
+                  const macroUnit = logSheet === 'calories' ? 'kcal' : 'g'
+                  return (
+                    <div key={i.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white/90 truncate">{i.item}</p>
+                        <p className="text-[10px] text-white/40 flex items-center gap-1">
+                          <Clock size={9} /> {new Date(i.ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                          {' · '}{i.calories || 0} kcal · {Math.round(i.protein_g || 0)}p {Math.round(i.carbs_g || 0)}c {Math.round(i.fat_g || 0)}f
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold text-amber-300 tabular-nums flex-shrink-0">{macroVal != null ? Math.round(macroVal) : 0}<span className="text-[9px] text-white/30 font-normal ml-0.5">{macroUnit}</span></span>
+                      <button onClick={() => deleteIntake(i.id)} className="p-1.5 rounded-md text-rose-400/60 hover:text-rose-300 hover:bg-rose-500/10 flex-shrink-0" aria-label="Remove"><Trash2 size={13} /></button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <button onClick={() => setLogSheet(null)} className="w-full py-2.5 rounded-lg bg-white/5 border border-white/10 text-white/70 text-xs uppercase tracking-wider font-bold hover:bg-white/10">
+              Done
+            </button>
+          </motion.div>
+        </div>
+      )}
 
       {/* Why this calorie number? — math transparency modal */}
       {showCalMath && calTarget && calTarget.is_complete && (
