@@ -16,6 +16,7 @@ const TABS = [
 ]
 
 const LOG_OPTIONS = [
+  { href: '/chat', icon: Sparkles, label: 'Ask Vitals', color: 'bg-amber-500/15 border-amber-400/40 text-amber-300' },
   { href: '/journal', icon: Sparkles, label: 'Check-in', color: 'bg-violet-500/15 border-violet-400/40 text-violet-300' },
   { href: '/food', icon: Camera, label: 'Snap Plate', color: 'bg-amber-500/15 border-amber-400/40 text-amber-300' },
   { href: '/food-search', icon: Search, label: 'Search Food', color: 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300' },

@@ -325,6 +325,23 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Ask Vitals — conversational agent launcher. Primary low-friction surface. */}
+      {!needsOnboarding && (
+        <Link
+          href="/chat"
+          className="flex items-center gap-2.5 rounded-2xl border border-amber-400/30 bg-gradient-to-r from-amber-400/[0.08] to-violet-400/[0.06] px-4 py-3 hover:brightness-110 transition-all active:scale-[0.99]"
+        >
+          <div className="w-8 h-8 rounded-lg bg-amber-400/15 border border-amber-400/30 flex items-center justify-center flex-shrink-0">
+            <Sparkles size={15} className="text-amber-400" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-white leading-tight">Ask Vitals anything</p>
+            <p className="text-[11px] text-white/45 leading-tight">Talk to log food · &ldquo;should I train today?&rdquo;</p>
+          </div>
+          <ChevronRight size={16} className="text-white/30 flex-shrink-0" />
+        </Link>
+      )}
+
       {/* Open workout banner */}
       {openWorkout && (
         <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
