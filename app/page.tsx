@@ -67,19 +67,19 @@ export default function HomePage() {
     async function fetchAll() {
       try {
         const dateStr = getLocalDateString()
-        const { data: { user } } = await supabase.auth.getUser()
-        const uid = user?.id
+        const { data: { session } } = await supabase.auth.getSession()
+        const uid = session?.user?.id
         if (uid) loadTodayItems(uid)
 
         const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
         const nowIso = new Date().toISOString()
-        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, onboardingDataRes, biometricsRes, bioLatestRes] = await Promise.all([
+        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, biometricsRes, bioLatestRes] = await Promise.all([
           supabase.from('daily_summary').select('*').eq('date', dateStr).maybeSingle(),
           uid
             ? supabase.from('user_profile').select('*').eq('id', uid).maybeSingle()
             : Promise.resolve({ data: null }),
           uid
-            ? supabase.from('onboarding_progress').select('completed_at').eq('user_id', uid).maybeSingle()
+            ? supabase.from('onboarding_progress').select('completed_at, identity_data, rhythm_data, first_goal').eq('user_id', uid).maybeSingle()
             : Promise.resolve({ data: null }),
           uid
             ? supabase
@@ -113,9 +113,6 @@ export default function HomePage() {
                 .maybeSingle()
             : Promise.resolve({ data: null }),
           uid
-            ? supabase.from('onboarding_progress').select('identity_data, rhythm_data, first_goal').eq('user_id', uid).maybeSingle()
-            : Promise.resolve({ data: null }),
-          uid
             ? supabase.from('biometric_entries').select('active_calories, for_date').eq('user_id', uid).not('active_calories', 'is', null).gte('for_date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)).order('for_date', { ascending: false }).limit(7)
             : Promise.resolve({ data: null }),
           uid
@@ -127,7 +124,7 @@ export default function HomePage() {
           const tz = getUserTimezone()
           const stored = (profileRes.data as { timezone?: string }).timezone
           if (stored !== tz) {
-            await supabase.from('user_profile').update({ timezone: tz }).eq('id', uid)
+            void supabase.from('user_profile').update({ timezone: tz }).eq('id', uid)
           }
         }
         if (summaryRes.data) {
@@ -152,9 +149,9 @@ export default function HomePage() {
         })
 
         // Compute personalized calorie target from profile data
-        const identity = (onboardingDataRes.data?.identity_data || {}) as Record<string, unknown>
-        const rhythm = (onboardingDataRes.data?.rhythm_data || {}) as Record<string, unknown>
-        const inferredGoal = inferCalorieGoalFromText(onboardingDataRes.data?.first_goal ?? null)
+        const identity = ((onbRes.data as { identity_data?: Record<string, unknown> } | null)?.identity_data || {}) as Record<string, unknown>
+        const rhythm = ((onbRes.data as { rhythm_data?: Record<string, unknown> } | null)?.rhythm_data || {}) as Record<string, unknown>
+        const inferredGoal = inferCalorieGoalFromText((onbRes.data as { first_goal?: string } | null)?.first_goal ?? null)
         // Roll up average daily ACTIVE (move) calories from the wearable. TDEE is then
         // computed as BMR + this avg (robust vs Apple's double-counted total energy).
         // Skip today (incomplete day). Clamp per-day to ignore obvious double-count spikes.

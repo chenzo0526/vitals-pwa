@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Square, Loader2, Check, Dumbbell, X, Clock, Edit3, Trash2, Mic, MicOff, Sparkles, ChevronDown, ChevronUp, Info } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Square, Loader2, Check, Dumbbell, X, Clock, Edit3, Trash2, Mic, MicOff, Sparkles, ChevronDown, ChevronUp, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
@@ -68,6 +68,7 @@ function ActiveWorkoutInner() {
   const [showRpeInfo, setShowRpeInfo] = useState(false)
   const [savingExercise, setSavingExercise] = useState(false)
   const [restRemaining, setRestRemaining] = useState<number | null>(null)
+  const [restEnabled, setRestEnabled] = useState(false)
   const [showEnd, setShowEnd] = useState(false)
   const [editingSet, setEditingSet] = useState<SetRow | null>(null)
   const [now, setNow] = useState<number>(() => Date.now())
@@ -123,6 +124,10 @@ function ActiveWorkoutInner() {
   }, [])
 
   useEffect(() => {
+    try { setRestEnabled(localStorage.getItem('vitals:restTimer') === '1') } catch { /* noop */ }
+  }, [])
+
+  useEffect(() => {
     if (restRemaining === null) return
     if (restRemaining <= 0) {
       setRestRemaining(null)
@@ -156,15 +161,6 @@ function ActiveWorkoutInner() {
 
   function updateDraftSet(idx: number, key: keyof DraftSet, value: string) {
     setDraftSets((prev) => prev.map((s, i) => (i === idx ? { ...s, [key]: value } : s)))
-  }
-
-  function addDraftRow() {
-    const last = draftSets[draftSets.length - 1]
-    setDraftSets((prev) => [...prev, { weight_lb: last?.weight_lb || '', reps: last?.reps || '', rpe: '' }])
-  }
-
-  function removeDraftRow(idx: number) {
-    setDraftSets((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx))
   }
 
   async function logSingleSet(idx: number) {
@@ -222,56 +218,10 @@ function ActiveWorkoutInner() {
         if (remaining.length === 0) return [{ weight_lb: d.weight_lb, reps: d.reps, rpe: '' }]
         return remaining
       })
-      setRestRemaining(90)
+      if (restEnabled) setRestRemaining(90)
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(30)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not log set')
-    } finally {
-      setSavingExercise(false)
-    }
-  }
-
-  async function saveExercise() {
-    if (!session || !sessionId) return
-    const name = exerciseName.trim()
-    if (!name) {
-      setError('Tap to pick an exercise first')
-      return
-    }
-    const validRows = draftSets.filter((d) => d.weight_lb || d.reps)
-    if (validRows.length === 0) {
-      setError('Add weight or reps for at least one set')
-      return
-    }
-    setSavingExercise(true)
-    setError(null)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/login?redirect=/workout')
-        return
-      }
-      let setNumStart = nextSetNumber
-      const rows = validRows.map((d) => ({
-        session_id: sessionId,
-        user_id: user.id,
-        exercise_name: name,
-        set_number: setNumStart++,
-        weight_lb: d.weight_lb ? Number(d.weight_lb) : null,
-        reps: d.reps ? Number(d.reps) : null,
-        rpe: d.rpe ? Number(d.rpe) : null,
-      }))
-      const { data, error: insertErr } = await supabase.from('workout_sets').insert(rows).select()
-      if (insertErr) throw new Error(insertErr.message)
-      if (data) setAllSets((prev) => [...prev, ...(data as SetRow[])])
-
-      // Reset for next exercise + start rest timer
-      setExerciseName('')
-      setDraftSets([{ weight_lb: '', reps: '', rpe: '' }])
-      setRestRemaining(90)
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(30)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed')
     } finally {
       setSavingExercise(false)
     }
@@ -420,10 +370,32 @@ function ActiveWorkoutInner() {
             </button>
           </div>
 
-          {/* Set entry — 2-col Weight + Reps, RPE behind toggle */}
+          {/* Superset quick-switch — tap an exercise you've already hit this session to jump back to it */}
+          {groupedByExercise.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[9px] uppercase tracking-wider text-white/30">Jump to:</span>
+              {groupedByExercise.map(([name]) => (
+                <button
+                  key={name}
+                  onClick={() => setExerciseName(name)}
+                  className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${
+                    exerciseName === name
+                      ? 'bg-amber-400/20 border-amber-400/50 text-amber-200'
+                      : 'bg-white/5 border-white/10 text-white/60 hover:text-white/90'
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Single set entry — log one set at a time. Switch the exercise above anytime (supersets). */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-wider text-white/40 font-bold">Sets</p>
+              <p className="text-[10px] uppercase tracking-wider text-white/40 font-bold tabular-nums">
+                {exerciseName ? `${exerciseName} · Set ${nextSetNumber}` : 'Set'}
+              </p>
               <button
                 onClick={() => setShowRpe((s) => !s)}
                 className="text-[10px] uppercase tracking-wider text-white/40 hover:text-white/80 flex items-center gap-1"
@@ -439,86 +411,67 @@ function ActiveWorkoutInner() {
             </div>
             {showRpeInfo && (
               <p className="text-[10px] text-amber-200/70 bg-amber-400/[0.05] border border-amber-400/20 rounded p-2 leading-relaxed">
-                <span className="font-bold">RPE = Rate of Perceived Exertion (1-10).</span> How hard the set felt. 10 = absolute max, 9 = 1 rep in reserve, 8 = 2 RIR, 7 = 3 RIR. Optional — only track it if you find it useful.
+                <span className="font-bold">RPE = Rate of Perceived Exertion (1-10).</span> How hard the set felt. 10 = absolute max, 9 = 1 rep in reserve, 8 = 2 RIR. Optional.
               </p>
             )}
-            {draftSets.map((d, i) => (
-              <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold tabular-nums">
-                    Set {nextSetNumber + i}
-                  </span>
-                  <button
-                    onClick={() => removeDraftRow(i)}
-                    className="text-white/30 hover:text-rose-400 disabled:opacity-20 p-0.5"
-                    disabled={draftSets.length === 1}
-                    aria-label="Remove this draft"
-                  >
-                    <X size={12} />
-                  </button>
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] uppercase tracking-wider text-white/40">Weight (lb)</label>
+                  <input
+                    type="number" inputMode="decimal" value={draftSets[0]?.weight_lb || ''}
+                    onChange={(e) => updateDraftSet(0, 'weight_lb', e.target.value)}
+                    onBlur={(e) => updateDraftSet(0, 'weight_lb', e.target.value)}
+                    placeholder="0"
+                    className="w-full mt-0.5 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
+                  />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[9px] uppercase tracking-wider text-white/40">Weight (lb)</label>
-                    <input
-                      type="number" inputMode="decimal" value={d.weight_lb}
-                      onChange={(e) => updateDraftSet(i, 'weight_lb', e.target.value)}
-                      onBlur={(e) => updateDraftSet(i, 'weight_lb', e.target.value)}
-                      placeholder="0"
-                      className="w-full mt-0.5 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] uppercase tracking-wider text-white/40">Reps</label>
-                    <input
-                      type="number" inputMode="numeric" value={d.reps}
-                      onChange={(e) => updateDraftSet(i, 'reps', e.target.value)}
-                      onBlur={(e) => updateDraftSet(i, 'reps', e.target.value)}
-                      placeholder="0"
-                      className="w-full mt-0.5 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
-                    />
-                  </div>
+                <div>
+                  <label className="text-[9px] uppercase tracking-wider text-white/40">Reps</label>
+                  <input
+                    type="number" inputMode="numeric" value={draftSets[0]?.reps || ''}
+                    onChange={(e) => updateDraftSet(0, 'reps', e.target.value)}
+                    onBlur={(e) => updateDraftSet(0, 'reps', e.target.value)}
+                    placeholder="0"
+                    className="w-full mt-0.5 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50"
+                  />
                 </div>
-                {showRpe && (
-                  <div>
-                    <label className="text-[9px] uppercase tracking-wider text-amber-300/60">RPE 1-10</label>
-                    <input
-                      type="number" inputMode="decimal" step="0.5" min="1" max="10" value={d.rpe}
-                      onChange={(e) => updateDraftSet(i, 'rpe', e.target.value)}
-                      onBlur={(e) => updateDraftSet(i, 'rpe', e.target.value)}
-                      placeholder="Optional"
-                      className="w-full mt-0.5 bg-white/[0.03] border border-amber-400/20 rounded-md px-2 py-1.5 text-xs tabular-nums focus:outline-none focus:border-amber-400/40 text-amber-200/80"
-                    />
-                  </div>
-                )}
-                <Button
-                  onClick={() => logSingleSet(i)}
-                  disabled={savingExercise || !exerciseName.trim() || (!d.weight_lb && !d.reps)}
-                  className="w-full bg-emerald-400 text-black hover:bg-emerald-300 disabled:opacity-30 font-bold h-9 text-xs"
-                >
-                  {savingExercise ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Check size={12} className="mr-1" />}
-                  Log Set & Start Rest
-                </Button>
               </div>
-            ))}
-          </div>
+              {showRpe && (
+                <div>
+                  <label className="text-[9px] uppercase tracking-wider text-amber-300/60">RPE 1-10</label>
+                  <input
+                    type="number" inputMode="decimal" step="0.5" min="1" max="10" value={draftSets[0]?.rpe || ''}
+                    onChange={(e) => updateDraftSet(0, 'rpe', e.target.value)}
+                    onBlur={(e) => updateDraftSet(0, 'rpe', e.target.value)}
+                    placeholder="Optional"
+                    className="w-full mt-0.5 bg-white/[0.03] border border-amber-400/20 rounded-md px-2 py-1.5 text-xs tabular-nums focus:outline-none focus:border-amber-400/40 text-amber-200/80"
+                  />
+                </div>
+              )}
+              <Button
+                onClick={() => logSingleSet(0)}
+                disabled={savingExercise || !exerciseName.trim() || (!draftSets[0]?.weight_lb && !draftSets[0]?.reps)}
+                className="w-full bg-emerald-400 text-black hover:bg-emerald-300 disabled:opacity-30 font-bold h-11 text-sm"
+              >
+                {savingExercise ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Check size={14} className="mr-1.5" />}
+                Log set
+              </Button>
+            </div>
 
-          <div className="flex gap-2">
-            <Button
-              onClick={addDraftRow}
-              variant="outline"
-              className="flex-1 border-white/20 text-white/70 hover:bg-white/10"
-            >
-              <Plus size={14} className="mr-1" /> Add another draft
-            </Button>
-            <Button
-              onClick={saveExercise}
-              disabled={savingExercise || !exerciseName.trim() || draftSets.every(d => !d.weight_lb && !d.reps)}
-              className="flex-1 bg-amber-400/20 border border-amber-400/40 text-amber-200 hover:bg-amber-400/30 disabled:opacity-30 text-xs"
-              title="Save all drafts at once (instead of one-at-a-time)"
-            >
-              Save all drafts
-            </Button>
+            {/* Rest timer toggle — off by default; some lifters just go when ready */}
+            <label className="flex items-center justify-between px-1 py-1 cursor-pointer">
+              <span className="text-[10px] uppercase tracking-wider text-white/40 flex items-center gap-1.5">
+                <Clock size={11} /> Auto rest timer after each set
+              </span>
+              <button
+                onClick={() => setRestEnabled((v) => { const nv = !v; try { localStorage.setItem('vitals:restTimer', nv ? '1' : '0') } catch { /* noop */ } return nv })}
+                className={`relative w-9 h-5 rounded-full transition-colors ${restEnabled ? 'bg-emerald-400' : 'bg-white/15'}`}
+                aria-label="Toggle rest timer"
+              >
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${restEnabled ? 'translate-x-4' : ''}`} />
+              </button>
+            </label>
           </div>
 
           {error && (
