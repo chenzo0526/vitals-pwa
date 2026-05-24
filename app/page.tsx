@@ -63,6 +63,7 @@ export default function HomePage() {
   const [todayItems, setTodayItems] = useState<IntakeItem[]>([])
   const [logSheet, setLogSheet] = useState<null | 'calories' | 'protein' | 'carbs' | 'fat'>(null)
   const [checkedInToday, setCheckedInToday] = useState(true) // assume true until known (avoid flash)
+  const [weeklyAvgCals, setWeeklyAvgCals] = useState<number | null>(null)
 
   useEffect(() => {
     async function fetchAll() {
@@ -74,7 +75,7 @@ export default function HomePage() {
 
         const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
         const nowIso = new Date().toISOString()
-        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, biometricsRes, bioLatestRes, checkinTodayRes] = await Promise.all([
+        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, biometricsRes, bioLatestRes, checkinTodayRes, weekSummaryRes] = await Promise.all([
           supabase.from('daily_summary').select('*').eq('date', dateStr).maybeSingle(),
           uid
             ? supabase.from('user_profile').select('*').eq('id', uid).maybeSingle()
@@ -121,6 +122,9 @@ export default function HomePage() {
             : Promise.resolve({ data: null }),
           uid
             ? supabase.from('daily_checkins').select('id').eq('user_id', uid).eq('for_date', dateStr).maybeSingle()
+            : Promise.resolve({ data: null }),
+          uid
+            ? supabase.from('daily_summary').select('date, calories_total').eq('user_id', uid).gte('date', new Date(Date.now() - 7 * 86400000).toISOString().slice(0,10)).order('date', { ascending: false })
             : Promise.resolve({ data: null }),
         ])
 
@@ -183,6 +187,11 @@ export default function HomePage() {
           setBio((bioLatestRes as { data: BioSnapshot }).data)
         }
         setCheckedInToday(!!(checkinTodayRes as { data?: { id: string } | null })?.data)
+        const weekRows = ((weekSummaryRes as { data?: Array<{ date: string; calories_total: number | null }> | null })?.data) || []
+        const daysWithIntake = weekRows.filter((r) => (r.calories_total || 0) > 0)
+        if (daysWithIntake.length >= 2) {
+          setWeeklyAvgCals(Math.round(daysWithIntake.reduce((a, r) => a + (r.calories_total || 0), 0) / daysWithIntake.length))
+        }
       } finally {
         setLoading(false)
       }
@@ -638,6 +647,18 @@ export default function HomePage() {
                 ? 'On target'
                 : `${Math.abs(caloriesRemaining).toLocaleString()} kcal over`}
             </p>
+            {weeklyAvgCals != null && calTarget?.is_complete && (
+              <div className="flex items-center justify-between pt-2 mt-1 border-t border-white/5">
+                <span className="text-[10px] uppercase tracking-wider text-white/40">7-day avg / day</span>
+                <span className="text-[11px] tabular-nums">
+                  <span className="text-white/80 font-semibold">{weeklyAvgCals.toLocaleString()}</span>
+                  <span className="text-white/30"> vs {goals.calories.toLocaleString()} · </span>
+                  <span className={weeklyAvgCals <= goals.calories ? 'text-emerald-300' : 'text-rose-300'}>
+                    {weeklyAvgCals <= goals.calories ? `${(goals.calories - weeklyAvgCals).toLocaleString()} under` : `${(weeklyAvgCals - goals.calories).toLocaleString()} over`}
+                  </span>
+                </span>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
