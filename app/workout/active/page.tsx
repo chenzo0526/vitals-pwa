@@ -74,6 +74,7 @@ function ActiveWorkoutInner() {
   const [now, setNow] = useState<number>(() => Date.now())
   const [error, setError] = useState<string | null>(null)
   const [previousExercises, setPreviousExercises] = useState<string[]>([])
+  const [lastTime, setLastTime] = useState<{ date: string; sets: Array<{ weight_lb: number | null; reps: number | null }>; topWeight: number; topReps: number } | null>(null)
 
   // Load session + sets
   useEffect(() => {
@@ -142,6 +143,39 @@ function ActiveWorkoutInner() {
     if (!session) return 0
     return Math.max(0, Math.floor((now - new Date(session.started_at).getTime()) / 1000))
   }, [session, now])
+
+  // Progressive overload: pull what the user did LAST time for this exact movement
+  // (most recent earlier session). Foundation for the mesocycle feature.
+  useEffect(() => {
+    const name = exerciseName.trim()
+    if (!name || !sessionId) { setLastTime(null); return }
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('workout_sets')
+        .select('session_id, weight_lb, reps, created_at')
+        .ilike('exercise_name', name)
+        .neq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(40)
+      if (cancelled) return
+      if (!data || data.length === 0) { setLastTime(null); return }
+      const lastSessionId = (data[0] as { session_id: string }).session_id
+      const rows = (data as Array<{ session_id: string; weight_lb: number | null; reps: number | null; created_at: string }>)
+        .filter((r) => r.session_id === lastSessionId)
+      const topWeight = Math.max(0, ...rows.map((r) => r.weight_lb || 0))
+      const topReps = Math.max(0, ...rows.map((r) => r.reps || 0))
+      setLastTime({
+        date: rows[0].created_at,
+        sets: rows.map((r) => ({ weight_lb: r.weight_lb, reps: r.reps })).reverse(),
+        topWeight,
+        topReps,
+      })
+      // Prefill weight to last time's top set so the user just nudges it up
+      setDraftSets((prev) => (prev[0]?.weight_lb ? prev : [{ weight_lb: topWeight ? String(topWeight) : '', reps: '', rpe: '' }]))
+    })()
+    return () => { cancelled = true }
+  }, [exerciseName, sessionId])
 
   const groupedByExercise = useMemo(() => {
     const map = new Map<string, SetRow[]>()
@@ -369,6 +403,25 @@ function ActiveWorkoutInner() {
               <Dumbbell size={14} className="text-amber-400/70 flex-shrink-0" />
             </button>
           </div>
+
+          {/* Last time — progressive overload nudge */}
+          {exerciseName && lastTime && (
+            <div className="rounded-lg border border-amber-400/25 bg-amber-400/[0.06] p-2.5">
+              <p className="text-[10px] uppercase tracking-wider text-amber-300/80 font-bold flex items-center gap-1">
+                <Dumbbell size={10} /> Last time · {new Date(lastTime.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </p>
+              <p className="text-xs text-white/80 mt-1 tabular-nums">
+                {lastTime.sets.map((st, i) => (
+                  <span key={i} className="mr-2 inline-block">
+                    {st.weight_lb != null ? `${st.weight_lb}lb` : '—'}{st.reps != null ? ` × ${st.reps}` : ''}
+                  </span>
+                ))}
+              </p>
+              <p className="text-[11px] text-emerald-300/90 mt-1 font-medium">
+                Progress it: try {lastTime.topWeight > 0 ? `${Math.round((lastTime.topWeight + 5) * 2) / 2}lb` : 'more weight'}{lastTime.topReps > 0 ? ` or ${lastTime.topReps + 1}+ reps` : ''} to keep building.
+              </p>
+            </div>
+          )}
 
           {/* Superset quick-switch — tap an exercise you've already hit this session to jump back to it */}
           {groupedByExercise.length > 0 && (

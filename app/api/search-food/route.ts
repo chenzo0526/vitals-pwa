@@ -56,7 +56,7 @@ async function estimateFoodWithClaude(query: string) {
       model: 'claude-sonnet-4-5',
       max_tokens: 700,
       temperature: 0.2,
-      system: 'You are a nutrition database. Given a food query, return ONLY valid JSON: {"results":[{"name":string,"per_amount":string (e.g. "100g" or "1 scoop (30g)"),"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"water_ml":number}]}. 1-3 best matches. Realistic macros. No prose.',
+      system: 'You are a nutrition database. Return ONLY valid JSON: {"results":[{"name":string,"per_amount":string,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"water_ml":number}]}. CRITICAL: every result MUST be the food the user actually searched for (or an obvious variant of it) — NEVER substitute an unrelated food. If the query is a restaurant/composite dish (e.g. "spicy tuna roll", "chicken burrito"), estimate THAT dish at a realistic serving. 1-3 matches. Realistic macros. No prose.',
       messages: [{ role: 'user', content: `Food query: "${query}"` }],
     })
     const c = resp.content[0]

@@ -12,8 +12,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/components/Toast'
 import { celebrate } from '@/lib/celebrate'
-import { resolveLogDate, readDateParamFromUrl } from '@/lib/logDate'
-import LogDateBanner from '@/components/LogDateBanner'
+import { resolveLogDate, readDateParamFromUrl, todayStr, yesterdayStr, logDateLabel } from '@/lib/logDate'
 
 type FoodResult = {
   fdc_id: number
@@ -43,8 +42,9 @@ export default function FoodSearchPage() {
   const [selected, setSelected] = useState<FoodResult | null>(null)
   const [servings, setServings] = useState<number>(1)
   const [logging, setLogging] = useState(false)
-  const [logCtx] = useState(() => resolveLogDate(readDateParamFromUrl()))
+  const [logDate, setLogDate] = useState<string>(() => readDateParamFromUrl() || todayStr())
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchSeq = useRef(0)
 
   // Debounced search
   useEffect(() => {
@@ -58,17 +58,20 @@ export default function FoodSearchPage() {
   }, [query])
 
   async function doSearch(q: string) {
+    const seq = ++searchSeq.current
     setSearching(true)
     setError(null)
     try {
       const res = await fetch(`/api/search-food?q=${encodeURIComponent(q)}&limit=12`)
       const data = await res.json()
+      if (seq !== searchSeq.current) return // a newer search superseded this one — drop stale results
       if (!res.ok) throw new Error(data.error || 'Search failed')
       setResults(data.results || [])
     } catch (e) {
+      if (seq !== searchSeq.current) return
       setError(e instanceof Error ? e.message : 'Search failed')
     } finally {
-      setSearching(false)
+      if (seq === searchSeq.current) setSearching(false)
     }
   }
 
@@ -84,7 +87,7 @@ export default function FoodSearchPage() {
       const mult = Math.max(0.1, servings || 1)
       const { error: insErr } = await supabase.from('intake_events').insert({
         user_id: userId,
-        ts: logCtx.ts,
+        ts: resolveLogDate(logDate).ts,
         item: selected.name,
         qty_text: `${servings} × ${selected.per_amount}`,
         calories: Math.round(selected.calories * mult),
@@ -96,7 +99,7 @@ export default function FoodSearchPage() {
         raw_input: `usda:${selected.fdc_id}`,
       })
       if (insErr) throw new Error(insErr.message)
-      toast({ kind: 'success', title: 'Logged', text: selected.name })
+      toast({ kind: 'success', title: `Logged to ${logDateLabel(logDate)}`, text: selected.name })
       celebrate.food()
       setTimeout(() => router.push('/'), 900)
     } catch (e) {
@@ -111,7 +114,13 @@ export default function FoodSearchPage() {
       <Link href="/" className="text-xs text-white/40 hover:text-white/70 flex items-center gap-1">
         <ChevronLeft size={12} /> Home
       </Link>
-      <LogDateBanner dateStr={logCtx.dateStr} isToday={logCtx.isToday} />
+      {/* Day selector — log to today or backfill a past day. Weekly cutters need this. */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] uppercase tracking-wider text-white/40">Log to:</span>
+        <button onClick={() => setLogDate(todayStr())} className={`text-[11px] font-semibold px-2.5 py-1 rounded-md border ${logDate === todayStr() ? 'bg-amber-400/15 border-amber-400/40 text-amber-200' : 'border-white/10 text-white/50'}`}>Today</button>
+        <button onClick={() => setLogDate(yesterdayStr())} className={`text-[11px] font-semibold px-2.5 py-1 rounded-md border ${logDate === yesterdayStr() ? 'bg-amber-400/15 border-amber-400/40 text-amber-200' : 'border-white/10 text-white/50'}`}>Yesterday</button>
+        <input type="date" max={todayStr()} value={logDate} onChange={(e) => e.target.value && setLogDate(e.target.value)} className="text-[11px] bg-black/30 border border-white/10 rounded-md px-2 py-1 text-white/70 focus:outline-none focus:border-amber-400/40 ml-auto" />
+      </div>
 
       <div>
         <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
@@ -238,7 +247,7 @@ export default function FoodSearchPage() {
               disabled={logging}
               className="w-full bg-emerald-400 text-black hover:bg-emerald-300 font-bold h-12 disabled:opacity-50"
             >
-              {logging ? <><Loader2 size={14} className="mr-2 animate-spin" /> Logging</> : <><Check size={14} className="mr-2" /> Log to today</>}
+              {logging ? <><Loader2 size={14} className="mr-2 animate-spin" /> Logging</> : <><Check size={14} className="mr-2" /> Log to {logDateLabel(logDate)}</>}
             </Button>
           </CardContent>
         </Card>
