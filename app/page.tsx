@@ -62,6 +62,7 @@ export default function HomePage() {
   const [showCalMath, setShowCalMath] = useState(false)
   const [todayItems, setTodayItems] = useState<IntakeItem[]>([])
   const [logSheet, setLogSheet] = useState<null | 'calories' | 'protein' | 'carbs' | 'fat'>(null)
+  const [checkedInToday, setCheckedInToday] = useState(true) // assume true until known (avoid flash)
 
   useEffect(() => {
     async function fetchAll() {
@@ -73,7 +74,7 @@ export default function HomePage() {
 
         const sixHoursAgoIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
         const nowIso = new Date().toISOString()
-        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, biometricsRes, bioLatestRes] = await Promise.all([
+        const [summaryRes, profileRes, onbRes, openSessionRes, physiqueRes, substancesRes, bloodworkRes, nextScheduledRes, biometricsRes, bioLatestRes, checkinTodayRes] = await Promise.all([
           supabase.from('daily_summary').select('*').eq('date', dateStr).maybeSingle(),
           uid
             ? supabase.from('user_profile').select('*').eq('id', uid).maybeSingle()
@@ -117,6 +118,9 @@ export default function HomePage() {
             : Promise.resolve({ data: null }),
           uid
             ? supabase.from('biometric_entries').select('for_date, hrv_rmssd, rhr_bpm, sleep_total_min, steps, active_calories').eq('user_id', uid).order('for_date', { ascending: false }).limit(1).maybeSingle()
+            : Promise.resolve({ data: null }),
+          uid
+            ? supabase.from('daily_checkins').select('id').eq('user_id', uid).eq('for_date', dateStr).maybeSingle()
             : Promise.resolve({ data: null }),
         ])
 
@@ -178,6 +182,7 @@ export default function HomePage() {
         if (bioLatestRes && (bioLatestRes as { data?: BioSnapshot | null }).data) {
           setBio((bioLatestRes as { data: BioSnapshot }).data)
         }
+        setCheckedInToday(!!(checkinTodayRes as { data?: { id: string } | null })?.data)
       } finally {
         setLoading(false)
       }
@@ -365,6 +370,32 @@ export default function HomePage() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-white leading-tight">Ask Vitals anything</p>
             <p className="text-[11px] text-white/45 leading-tight">Talk to log food · &ldquo;should I train today?&rdquo;</p>
+          </div>
+          <ChevronRight size={16} className="text-white/30 flex-shrink-0" />
+        </Link>
+      )}
+
+      {/* Proactive check-in nudge — drives FRESH input so the coach isn't recycling stale data */}
+      {!needsOnboarding && !loading && !checkedInToday && (
+        <Link
+          href="/journal"
+          className="flex items-center gap-2.5 rounded-2xl border border-violet-400/30 bg-gradient-to-r from-violet-500/[0.10] to-transparent px-4 py-3 hover:brightness-110 transition-all active:scale-[0.99]"
+        >
+          <div className="w-8 h-8 rounded-lg bg-violet-400/15 border border-violet-400/30 flex items-center justify-center flex-shrink-0">
+            <Sparkles size={15} className="text-violet-300" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-white leading-tight">
+              {(() => {
+                const h = new Date().getHours()
+                const d = new Date().getDay()
+                if (d === 1) return "How was the weekend?"
+                if (h < 11) return "Morning check-in — how'd you sleep?"
+                if (h < 17) return "Quick check-in — how's the day going?"
+                return "Evening check-in — how'd today go?"
+              })()}
+            </p>
+            <p className="text-[11px] text-white/45 leading-tight">30 seconds out loud · keeps your coach sharp</p>
           </div>
           <ChevronRight size={16} className="text-white/30 flex-shrink-0" />
         </Link>
