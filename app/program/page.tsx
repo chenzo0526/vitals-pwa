@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Plus, X, Loader2, Trash2, ChevronRight, ChevronLeft as CL, Dumbbell, Save } from 'lucide-react'
+import { ChevronLeft, X, Loader2, Trash2, ChevronRight, ChevronLeft as CL, Dumbbell, Save, Sparkles } from 'lucide-react'
 import { supabase, getCurrentUserId } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,42 @@ export default function ProgramPage() {
   const [program, setProgram] = useState<Program | null>(null)
   const [building, setBuilding] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [genOpen, setGenOpen] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [genDays, setGenDays] = useState(4)
+  const [genNotes, setGenNotes] = useState('')
+  const [genErr, setGenErr] = useState<string | null>(null)
+
+  async function generateProgram() {
+    setGenerating(true)
+    setGenErr(null)
+    try {
+      const res = await fetch('/api/generate-program', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days_per_week: genDays, weeks, notes: genNotes }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      // Drop the AI program into the editable builder so the user can review/tweak then save.
+      if (data.name) setName(data.name)
+      if (data.weeks) setWeeks(Math.max(2, Math.min(12, Number(data.weeks))))
+      if (Array.isArray(data.days)) {
+        setDays(data.days.map((d: { label?: string; exercises?: ProgEx[] }) => ({
+          label: d.label || 'Day',
+          exercises: (d.exercises || []).map((e) => ({
+            name: e.name || '', sets: Number(e.sets) || 3, weight_lb: Number(e.weight_lb) || 0,
+            reps: Number(e.reps) || 10, prog: e.prog === 'reps' ? 'reps' : 'weight', inc: Number(e.inc) || (e.prog === 'reps' ? 1 : 5),
+          })),
+        })))
+      }
+      setGenOpen(false)
+      setBuilding(true)
+    } catch (e) {
+      setGenErr(e instanceof Error ? e.message : 'Generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   // builder state
   const [name, setName] = useState('My Mesocycle')
@@ -136,12 +172,44 @@ export default function ProgramPage() {
       )}
 
       {/* ===== No program ===== */}
-      {!program && !building && (
+      {!program && !building && !genOpen && (
         <Card className="border-white/10 bg-white/5">
-          <CardContent className="p-4 space-y-2 text-center">
+          <CardContent className="p-4 space-y-3 text-center">
             <p className="text-sm font-bold text-white">No active program</p>
-            <p className="text-xs text-white/60 leading-relaxed">Build a mesocycle: pick your days, movements, and starting numbers. Vitals progresses the weight/reps for you each week so you actually overload.</p>
-            <Button onClick={() => setBuilding(true)} className="bg-amber-400 text-black hover:bg-amber-300 font-semibold mt-1"><Plus size={15} className="mr-1" /> Build a program</Button>
+            <p className="text-xs text-white/60 leading-relaxed">Let your AI coach design a mesocycle from your goal, weak points, and recent lifts — then it auto-progresses the weight/reps each week. You can tweak anything before saving.</p>
+            <Button onClick={() => setGenOpen(true)} className="w-full bg-amber-400 text-black hover:bg-amber-300 font-semibold"><Sparkles size={15} className="mr-1.5" /> Build my program with AI</Button>
+            <button onClick={() => setBuilding(true)} className="text-[11px] text-white/45 hover:text-white/70 underline">or build it manually</button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ===== AI generation prefs ===== */}
+      {genOpen && !building && (
+        <Card className="border-amber-400/25 bg-amber-400/[0.04]">
+          <CardContent className="p-4 space-y-3">
+            <p className="text-sm font-bold text-white flex items-center gap-1.5"><Sparkles size={15} className="text-amber-400" /> AI coach — design my program</p>
+            <p className="text-[11px] text-white/55 leading-relaxed">It&apos;ll use your goal, physique weak points, and your logged lifts to set real starting weights — and ramp conservatively since you&apos;re returning to training.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-white/40">Days / week</label>
+                <input type="number" min={2} max={6} value={genDays} onChange={(e) => setGenDays(Math.max(2, Math.min(6, Number(e.target.value) || 4)))} className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50" />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-white/40">Block length (wks)</label>
+                <input type="number" min={3} max={8} value={weeks} onChange={(e) => setWeeks(Math.max(3, Math.min(8, Number(e.target.value) || 6)))} className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm tabular-nums focus:outline-none focus:border-amber-400/50" />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-white/40">Anything to factor in? (optional)</label>
+              <input value={genNotes} onChange={(e) => setGenNotes(e.target.value)} placeholder="e.g. tweaky left shoulder, prefer dumbbells, home gym" className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-2 py-2 text-sm focus:outline-none focus:border-amber-400/50" />
+            </div>
+            {genErr && <p className="text-xs text-rose-300">{genErr}</p>}
+            <div className="flex gap-2">
+              <Button onClick={() => setGenOpen(false)} variant="outline" className="flex-1 border-white/20 text-white/70">Cancel</Button>
+              <Button onClick={generateProgram} disabled={generating} className="flex-1 bg-amber-400 text-black hover:bg-amber-300 font-semibold disabled:opacity-50">
+                {generating ? <><Loader2 size={14} className="mr-1.5 animate-spin" /> Designing…</> : <><Sparkles size={14} className="mr-1.5" /> Generate</>}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
