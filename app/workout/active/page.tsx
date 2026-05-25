@@ -29,6 +29,7 @@ type SetRow = {
   weight_lb: number | null
   reps: number | null
   rpe: number | null
+  is_warmup?: boolean
 }
 
 type DraftSet = { weight_lb: string; reps: string; rpe: string }
@@ -65,6 +66,7 @@ function ActiveWorkoutInner() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [draftSets, setDraftSets] = useState<DraftSet[]>([{ weight_lb: '', reps: '', rpe: '' }])
   const [showRpe, setShowRpe] = useState(false)
+  const [isWarmup, setIsWarmup] = useState(false)
   const [showRpeInfo, setShowRpeInfo] = useState(false)
   const [savingExercise, setSavingExercise] = useState(false)
   const [restRemaining, setRestRemaining] = useState<number | null>(null)
@@ -155,6 +157,7 @@ function ActiveWorkoutInner() {
         .from('workout_sets')
         .select('session_id, weight_lb, reps, created_at')
         .ilike('exercise_name', name)
+        .eq('is_warmup', false)
         .neq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(40)
@@ -217,19 +220,23 @@ function ActiveWorkoutInner() {
         weight_lb: d.weight_lb ? Number(d.weight_lb) : null,
         reps: d.reps ? Number(d.reps) : null,
         rpe: d.rpe ? Number(d.rpe) : null,
+        is_warmup: isWarmup,
       }
       const { data, error: insertErr } = await supabase.from('workout_sets').insert([row]).select()
       if (insertErr) throw new Error(insertErr.message)
       if (data) setAllSets((prev) => [...prev, ...(data as SetRow[])])
-      // PR detection: did this weight beat the user's previous max for this exercise?
+      // PR detection: did this WORKING set beat the user's previous max? Warmups never count.
       const newWeight = d.weight_lb ? Number(d.weight_lb) : 0
-      if (newWeight > 0) {
+      if (isWarmup) {
+        celebrate.lift()
+      } else if (newWeight > 0) {
         try {
           const { data: priorMax } = await supabase
             .from('workout_sets')
             .select('weight_lb')
             .eq('user_id', user.id)
             .eq('exercise_name', name)
+            .eq('is_warmup', false)
             .neq('session_id', sessionId) // ignore this session's earlier sets
             .order('weight_lb', { ascending: false })
             .limit(1)
@@ -367,9 +374,9 @@ function ActiveWorkoutInner() {
                       <button
                         key={s.id}
                         onClick={() => setEditingSet(s)}
-                        className="text-[11px] px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/80 hover:bg-white/10 hover:border-amber-400/30 tabular-nums flex items-center gap-1"
+                        className={`text-[11px] px-2 py-1 rounded-md border tabular-nums flex items-center gap-1 hover:border-amber-400/30 ${s.is_warmup ? 'bg-orange-400/[0.06] border-orange-400/20 text-orange-200/70' : 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10'}`}
                       >
-                        <span className="text-white/40">#{s.set_number}</span>
+                        <span className={s.is_warmup ? 'text-orange-300/60' : 'text-white/40'}>{s.is_warmup ? 'W' : `#${s.set_number}`}</span>
                         {s.weight_lb != null && `${s.weight_lb}lb`}
                         {s.weight_lb != null && s.reps != null && ' × '}
                         {s.reps != null && `${s.reps}`}
@@ -502,13 +509,19 @@ function ActiveWorkoutInner() {
                   />
                 </div>
               )}
+              <button
+                onClick={() => setIsWarmup((w) => !w)}
+                className={`w-full text-[11px] uppercase tracking-wider font-bold py-1.5 rounded-md border transition-colors ${isWarmup ? 'bg-orange-400/15 border-orange-400/40 text-orange-200' : 'border-white/10 text-white/40 hover:text-white/70'}`}
+              >
+                {isWarmup ? '🔥 Warm-up set (won\'t count toward PRs/progress)' : 'Mark as warm-up set'}
+              </button>
               <Button
                 onClick={() => logSingleSet(0)}
                 disabled={savingExercise || !exerciseName.trim() || (!draftSets[0]?.weight_lb && !draftSets[0]?.reps)}
-                className="w-full bg-emerald-400 text-black hover:bg-emerald-300 disabled:opacity-30 font-bold h-11 text-sm"
+                className={`w-full disabled:opacity-30 font-bold h-11 text-sm ${isWarmup ? 'bg-orange-400 text-black hover:bg-orange-300' : 'bg-emerald-400 text-black hover:bg-emerald-300'}`}
               >
                 {savingExercise ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Check size={14} className="mr-1.5" />}
-                Log set
+                {isWarmup ? 'Log warm-up' : 'Log set'}
               </Button>
             </div>
 
