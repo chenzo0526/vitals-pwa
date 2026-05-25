@@ -278,8 +278,11 @@ export default function RecoveryPage() {
               {showToken ? <><EyeOff size={11} /> Hide</> : <><Eye size={11} /> Show URL</>}
             </button>
           </div>
+          <p className="text-[11px] text-cyan-200/80 leading-relaxed font-medium">
+            Optional — Vitals works fully without it. This adds passive recovery + step data.
+          </p>
           <p className="text-[11px] text-white/65 leading-relaxed">
-            Install <a href="https://www.healthyapps.dev/health-auto-export" target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline">Health Auto Export</a> (iOS, $5). In its REST API setting, paste the URL below. Schedule daily exports — HRV, RHR, sleep, steps all flow into Vitals automatically.
+            Apple Watch needs a one-time ~2-min setup (Apple blocks web apps from reading Health directly): install <a href="https://www.healthyapps.dev/health-auto-export" target="_blank" rel="noopener noreferrer" className="text-cyan-300 underline">Health Auto Export</a> (iOS), paste your URL below into its REST API automation, schedule daily. HRV, RHR, sleep, steps + calories then flow in automatically. <span className="text-white/45">(A future native app version makes this one tap.)</span>
           </p>
           {showToken && importToken && (
             <div className="bg-black/40 border border-white/10 rounded-md p-2 space-y-2">
