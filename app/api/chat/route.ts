@@ -61,6 +61,39 @@ const TOOLS: Anthropic.Tool[] = [
       required: ['ml'],
     },
   },
+  {
+    name: 'log_workout',
+    description: "Log a workout the user describes (e.g. 'did 4 sets of squats at 185 for 8', 'benched 3x10 at 135, then incline DB 3x12 at 50'). Parse every exercise and every set. Create one session with all the sets.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        focus: { type: 'string', description: "Body part / focus label, e.g. 'Legs', 'Push', 'Back'. Infer if not stated." },
+        exercises: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              sets: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { weight_lb: { type: 'number' }, reps: { type: 'number' }, rpe: { type: 'number' } },
+                },
+              },
+            },
+            required: ['name', 'sets'],
+          },
+        },
+      },
+      required: ['exercises'],
+    },
+  },
+  {
+    name: 'delete_last_food',
+    description: "Delete the user's most recent food/water log when they say they made a mistake (e.g. 'remove that', 'undo the last one', 'delete the shake I just logged').",
+    input_schema: { type: 'object', properties: {} },
+  },
 ]
 
 type ChatMsg = { role: 'user' | 'assistant'; content: string }
@@ -157,7 +190,7 @@ WHO YOU ARE
 - The user is bought-in but BUSY and gets bored of friction. Be the opposite of a form. One or two tight sentences usually beats a paragraph. Get to the point.
 
 WHAT YOU CAN DO
-- LOG things when they tell you: call log_food (estimate macros yourself — never ask for numbers) or log_water. After logging, confirm in one line with the running daily total vs target.
+- LOG things when they tell you: log_food (estimate macros yourself — never ask for numbers), log_water, or log_workout (parse every exercise + set). Made a mistake? delete_last_food removes the most recent log. After logging, confirm in ONE line with the running daily total vs target (or the workout summary).
 - ANSWER from their data: what they've eaten, calories/protein left, recovery, recent training, stack, body comp. Use real numbers from the context.
 - COACH: if they ask whether to train / how recovered they are / what to eat, give a clear call using recovery + recent training + soreness cues.
 
@@ -226,6 +259,43 @@ ${JSON.stringify(context, null, 2)}`
             if (error) throw new Error(error.message)
             actions.push(`water:${ml}`)
             toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: `Logged ${ml} ml water.` })
+          } else if (tu.name === 'log_workout') {
+            const wi = input as unknown as { focus?: string; exercises?: Array<{ name: string; sets: Array<{ weight_lb?: number; reps?: number; rpe?: number }> }> }
+            const exs = Array.isArray(wi.exercises) ? wi.exercises : []
+            if (exs.length === 0) {
+              toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'No exercises parsed.', is_error: true })
+            } else {
+              const { data: sess, error: sErr } = await supabase
+                .from('workout_sessions')
+                .insert({ user_id: userId, focus: String(wi.focus || 'Workout'), started_at: new Date().toISOString(), ended_at: new Date().toISOString() })
+                .select('id').single()
+              if (sErr || !sess) throw new Error(sErr?.message || 'session insert failed')
+              const rows: Array<Record<string, unknown>> = []
+              for (const ex of exs) {
+                let n = 1
+                for (const st of (ex.sets || [])) {
+                  rows.push({ session_id: sess.id, user_id: userId, exercise_name: ex.name, set_number: n++, weight_lb: st.weight_lb ?? null, reps: st.reps ?? null, rpe: st.rpe ?? null })
+                }
+              }
+              if (rows.length > 0) {
+                const { error: setErr } = await supabase.from('workout_sets').insert(rows)
+                if (setErr) throw new Error(setErr.message)
+              }
+              actions.push(`workout:${exs.length} exercises, ${rows.length} sets`)
+              toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: `Logged workout: ${exs.map((e) => e.name).join(', ')} (${rows.length} sets).` })
+            }
+          } else if (tu.name === 'delete_last_food') {
+            const { data: last } = await supabase
+              .from('intake_events').select('id, item').eq('user_id', userId)
+              .order('ts', { ascending: false }).limit(1).maybeSingle()
+            if (!last) {
+              toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Nothing recent to delete.' })
+            } else {
+              const { error: delErr } = await supabase.from('intake_events').delete().eq('id', (last as { id: string }).id)
+              if (delErr) throw new Error(delErr.message)
+              actions.push(`deleted:${(last as { item: string }).item}`)
+              toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: `Deleted: ${(last as { item: string }).item}.` })
+            }
           } else {
             toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: 'Unknown tool', is_error: true })
           }
