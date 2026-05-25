@@ -31,7 +31,7 @@ type Parsed = {
   total_macros?: { calories: number; protein_g: number; carbs_g: number; fat_g: number; water_ml?: number }
 }
 
-const SILENCE_MS = 3000
+const SILENCE_MS = 7000 // forgiving of natural mid-sentence pauses (was 3s, cut people off)
 
 export default function VoicePage() {
   const router = useRouter()
