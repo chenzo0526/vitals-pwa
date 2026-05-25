@@ -206,7 +206,12 @@ export default function WorkoutPage() {
 
   return (
     <div className="px-4 pt-6 space-y-4 pb-8">
-      <h1 className="text-2xl font-bold tracking-tight text-white">Workout</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight text-white">Workout</h1>
+        <Link href="/program" className="text-[11px] font-semibold px-3 py-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20">
+          Program
+        </Link>
+      </div>
 
       {/* In-progress session — resume instead of starting a duplicate */}
       {openSession && (
