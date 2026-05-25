@@ -77,6 +77,7 @@ function ActiveWorkoutInner() {
   const [error, setError] = useState<string | null>(null)
   const [previousExercises, setPreviousExercises] = useState<string[]>([])
   const [lastTime, setLastTime] = useState<{ date: string; sets: Array<{ weight_lb: number | null; reps: number | null }>; topWeight: number; topReps: number } | null>(null)
+  const [planTargets, setPlanTargets] = useState<Array<{ name: string; sets: number; reps: number; weight: number }>>([])
 
   // Load session + sets
   useEffect(() => {
@@ -90,6 +91,25 @@ function ActiveWorkoutInner() {
       if (cancelled) return
       if (sessRes.data) setSession(sessRes.data as SessionRow)
       if (setsRes.data) setAllSets(setsRes.data as SetRow[])
+
+      // If this session follows a program day, load the prescribed movements + this-week targets.
+      const sess = sessRes.data as (SessionRow & { program_id?: string | null; program_day_index?: number | null }) | null
+      if (sess?.program_id != null && sess?.program_day_index != null) {
+        const { data: prog } = await supabase
+          .from('workout_programs').select('current_week, plan').eq('id', sess.program_id).maybeSingle()
+        if (!cancelled && prog) {
+          const day = (prog.plan as { days?: Array<{ exercises?: Array<{ name: string; sets: number; weight_lb: number; reps: number; prog: 'weight' | 'reps'; inc: number }> }> })?.days?.[sess.program_day_index]
+          const wk = Math.max(0, (prog.current_week || 1) - 1)
+          if (day?.exercises) {
+            setPlanTargets(day.exercises.filter((e) => e.name).map((e) => ({
+              name: e.name,
+              sets: e.sets,
+              reps: e.prog === 'reps' ? e.reps + wk * e.inc : e.reps,
+              weight: e.prog === 'weight' ? e.weight_lb + wk * e.inc : e.weight_lb,
+            })))
+          }
+        }
+      }
     }
     load()
     return () => { cancelled = true }
@@ -354,6 +374,40 @@ function ActiveWorkoutInner() {
             <Button onClick={skipRest} variant="outline" className="border-cyan-400/30 text-cyan-200 hover:bg-cyan-500/20">
               Skip
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Today's plan — prescribed movements + this-week targets, work top to bottom */}
+      {planTargets.length > 0 && (
+        <Card className="border-amber-400/25 bg-amber-400/[0.04]">
+          <CardContent className="p-3">
+            <p className="text-[10px] uppercase tracking-wider text-amber-300/80 font-bold mb-2">Today&apos;s plan · tap a movement to load it</p>
+            <div className="space-y-1.5">
+              {planTargets.map((pt, i) => {
+                const done = allSets.filter((st) => st.exercise_name.toLowerCase() === pt.name.toLowerCase() && !st.is_warmup).length
+                const complete = done >= pt.sets
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setExerciseName(pt.name)}
+                    className={`w-full flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors ${
+                      exerciseName.toLowerCase() === pt.name.toLowerCase() ? 'border-amber-400/50 bg-amber-400/10'
+                      : complete ? 'border-emerald-400/25 bg-emerald-500/[0.06]' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    <span className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 ${complete ? 'bg-emerald-400 border-emerald-400' : 'border-white/20'}`}>
+                      {complete && <Check size={12} className="text-black" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-sm font-medium truncate ${complete ? 'text-white/60 line-through' : 'text-white'}`}>{pt.name}</p>
+                      <p className="text-[10px] text-amber-200/70 tabular-nums">target {pt.sets} × {pt.reps} @ {pt.weight}lb</p>
+                    </div>
+                    <span className="text-[11px] tabular-nums text-white/50 flex-shrink-0">{done}/{pt.sets}</span>
+                  </button>
+                )
+              })}
+            </div>
           </CardContent>
         </Card>
       )}

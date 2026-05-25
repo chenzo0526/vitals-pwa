@@ -16,6 +16,8 @@ type ScheduledWorkout = {
 }
 
 type OpenSession = { id: string; focus: string | null; started_at: string }
+type ProgDay = { label: string; exercises: Array<{ name: string }> }
+type ActiveProgram = { id: string; name: string; current_week: number; weeks: number; plan: { days: ProgDay[] } }
 
 type Mode = 'now' | 'later'
 
@@ -42,6 +44,8 @@ export default function WorkoutPage() {
   const [error, setError] = useState<string | null>(null)
   const [upcoming, setUpcoming] = useState<ScheduledWorkout[]>([])
   const [openSession, setOpenSession] = useState<OpenSession | null>(null)
+  const [program, setProgram] = useState<ActiveProgram | null>(null)
+  const [startingDay, setStartingDay] = useState<number | null>(null)
 
   // Auto-end any of this user's STARTED workout_sessions that have been open >6 hours.
   // Scheduled-but-not-started rows are NOT auto-ended (started_at is null on those).
@@ -85,6 +89,39 @@ export default function WorkoutPage() {
   }
 
   useEffect(() => { loadUpcoming() }, [])
+
+  // Active program — so the user can start a prescribed day directly.
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase
+        .from('workout_programs')
+        .select('id, name, current_week, weeks, plan')
+        .eq('user_id', user.id).eq('active', true)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (data) setProgram(data as ActiveProgram)
+    })()
+  }, [])
+
+  async function startProgramDay(dayIndex: number) {
+    if (!program || startingDay !== null) return
+    setStartingDay(dayIndex)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login?redirect=/workout'); return }
+      const day = program.plan.days[dayIndex]
+      const { data, error: insErr } = await supabase
+        .from('workout_sessions')
+        .insert({ user_id: user.id, focus: day?.label || program.name, energy_pre: energyPre, started_at: new Date().toISOString(), program_id: program.id, program_day_index: dayIndex })
+        .select('id').single()
+      if (insErr || !data) throw new Error(insErr?.message || 'Could not start')
+      router.push(`/workout/active?session=${data.id}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start program day')
+      setStartingDay(null)
+    }
+  }
 
   // Detect an in-progress session so we can offer RESUME instead of starting a duplicate.
   useEffect(() => {
@@ -235,6 +272,35 @@ export default function WorkoutPage() {
             >
               <RotateCcw size={14} className="mr-1.5" /> Resume
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Active program — start a prescribed day with this week's targets */}
+      {program && program.plan.days.length > 0 && (
+        <Card className="border-amber-400/25 bg-amber-400/[0.05]">
+          <CardContent className="p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-amber-200">{program.name} · Week {program.current_week}/{program.weeks}</p>
+              <Link href="/program" className="text-[10px] uppercase tracking-wider text-white/40 hover:text-white/70">Edit</Link>
+            </div>
+            <div className="space-y-1.5">
+              {program.plan.days.map((d, i) => (
+                <button
+                  key={i}
+                  onClick={() => startProgramDay(i)}
+                  disabled={startingDay !== null}
+                  className="w-full flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 hover:bg-white/[0.07] disabled:opacity-50 active:scale-[0.99]"
+                >
+                  <div className="text-left min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{d.label}</p>
+                    <p className="text-[10px] text-white/45 truncate">{d.exercises.map((e) => e.name).filter(Boolean).join(' · ') || 'No movements'}</p>
+                  </div>
+                  {startingDay === i ? <Loader2 size={15} className="animate-spin text-amber-300 flex-shrink-0" /> : <Play size={15} className="text-amber-300 flex-shrink-0" />}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-white/35">Starts a session pre-loaded with this day&apos;s movements + this week&apos;s targets.</p>
           </CardContent>
         </Card>
       )}
