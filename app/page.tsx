@@ -37,7 +37,7 @@ type Today = {
 
 type OpenWorkout = { id: string; focus: string | null; started_at: string }
 type BioSnapshot = { for_date: string; hrv_rmssd: number | null; rhr_bpm: number | null; sleep_total_min: number | null; steps: number | null; active_calories: number | null }
-type IntakeItem = { id: string; item: string; calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null; water_ml: number | null; ts: string }
+type IntakeItem = { id: string; item: string; calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null; water_ml: number | null; sodium_mg: number | null; potassium_mg: number | null; ts: string }
 type NextScheduledWorkout = { id: string; focus: string | null; scheduled_at: string }
 
 type BaselineStatus = {
@@ -230,7 +230,7 @@ export default function HomePage() {
     const startIso = new Date(`${getLocalDateString()}T00:00:00`).toISOString()
     const { data } = await supabase
       .from('intake_events')
-      .select('id, item, calories, protein_g, carbs_g, fat_g, water_ml, ts')
+      .select('id, item, calories, protein_g, carbs_g, fat_g, water_ml, sodium_mg, potassium_mg, ts')
       .eq('user_id', userId)
       .gte('ts', startIso)
       .order('ts', { ascending: false })
@@ -770,6 +770,20 @@ export default function HomePage() {
               </div>
               <button onClick={() => setLogSheet(null)} className="text-white/40 hover:text-white/80 p-1.5"><X size={18} /></button>
             </div>
+
+            {/* Micronutrients — daily sodium + potassium from logged food */}
+            {(() => {
+              const na = todayItems.reduce((a, i) => a + (i.sodium_mg || 0), 0)
+              const k = todayItems.reduce((a, i) => a + (i.potassium_mg || 0), 0)
+              if (na === 0 && k === 0) return null
+              return (
+                <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                  <span className="text-[10px] uppercase tracking-wider text-white/40">Micros today</span>
+                  <span className="text-[11px] text-white/70 tabular-nums">Sodium <span className="font-semibold text-white">{na.toLocaleString()}</span> mg</span>
+                  <span className="text-[11px] text-white/70 tabular-nums">Potassium <span className="font-semibold text-white">{k.toLocaleString()}</span> mg</span>
+                </div>
+              )
+            })()}
 
             {todayItems.filter((i) => i.item !== 'Water').length === 0 ? (
               <p className="text-xs text-white/40 text-center py-6">Nothing logged yet today. Tap the + or Ask Vitals to log a meal.</p>

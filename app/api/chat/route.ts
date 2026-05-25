@@ -48,6 +48,8 @@ const TOOLS: Anthropic.Tool[] = [
         carbs_g: { type: 'number' },
         fat_g: { type: 'number' },
         water_ml: { type: 'number', description: 'Water content in ml if a drink, else 0' },
+        sodium_mg: { type: 'number', description: 'Estimated sodium in mg' },
+        potassium_mg: { type: 'number', description: 'Estimated potassium in mg' },
       },
       required: ['summary', 'calories', 'protein_g', 'carbs_g', 'fat_g'],
     },
@@ -245,6 +247,8 @@ ${JSON.stringify(context, null, 2)}`
               carbs_g: Math.round((Number(input.carbs_g) || 0) * 10) / 10,
               fat_g: Math.round((Number(input.fat_g) || 0) * 10) / 10,
               water_ml: Math.round(Number(input.water_ml) || 0),
+              sodium_mg: Math.round(Number(input.sodium_mg) || 0),
+              potassium_mg: Math.round(Number(input.potassium_mg) || 0),
               parsed_by: 'chat', raw_input: incoming[incoming.length - 1]?.content?.slice(0, 200) || '',
             })
             if (error) throw new Error(error.message)

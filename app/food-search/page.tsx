@@ -29,6 +29,7 @@ type FoodResult = {
   fiber_g: number
   sugar_g: number
   sodium_mg: number
+  potassium_mg?: number
   water_ml: number
 }
 
@@ -95,6 +96,8 @@ export default function FoodSearchPage() {
         carbs_g: Math.round(selected.carbs_g * mult * 10) / 10,
         fat_g: Math.round(selected.fat_g * mult * 10) / 10,
         water_ml: Math.round(selected.water_ml * mult),
+        sodium_mg: Math.round((selected.sodium_mg || 0) * mult),
+        potassium_mg: Math.round((selected.potassium_mg || 0) * mult),
         parsed_by: 'usda-search',
         raw_input: `usda:${selected.fdc_id}`,
       })

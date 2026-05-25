@@ -37,6 +37,7 @@ const NUTRIENT_IDS = {
   fiber_g: 1079,        // Fiber, total dietary
   sugar_g: 2000,        // Sugars, total
   sodium_mg: 1093,      // Sodium, Na
+  potassium_mg: 1092,   // Potassium, K
   water_ml: 1051,       // Water
 }
 
@@ -77,7 +78,8 @@ async function estimateFoodWithClaude(query: string) {
       fat_g: Math.round((Number(r.fat_g) || 0) * 10) / 10,
       fiber_g: 0,
       sugar_g: 0,
-      sodium_mg: 0,
+      sodium_mg: Math.round(Number(r.sodium_mg) || 0),
+      potassium_mg: Math.round(Number(r.potassium_mg) || 0),
       water_ml: Math.round(Number(r.water_ml) || 0),
       estimated: true,
     }))
@@ -132,6 +134,7 @@ export async function GET(req: NextRequest) {
         fiber_g: Math.round(pickNutrient(nutrients, NUTRIENT_IDS.fiber_g) * 10) / 10,
         sugar_g: Math.round(pickNutrient(nutrients, NUTRIENT_IDS.sugar_g) * 10) / 10,
         sodium_mg: Math.round(pickNutrient(nutrients, NUTRIENT_IDS.sodium_mg)),
+        potassium_mg: Math.round(pickNutrient(nutrients, NUTRIENT_IDS.potassium_mg)),
         water_ml: Math.round(pickNutrient(nutrients, NUTRIENT_IDS.water_ml)),
       }
     })

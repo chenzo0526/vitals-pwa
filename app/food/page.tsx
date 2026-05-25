@@ -21,6 +21,8 @@ type MacroItem = {
   protein_g: number
   carbs_g: number
   fat_g: number
+  sodium_mg?: number
+  potassium_mg?: number
   water_ml?: number
 }
 
@@ -119,6 +121,8 @@ export default function FoodPage() {
       carbs_g: totals.carbs_g,
       fat_g: totals.fat_g,
       water_ml: waterTotal,
+      sodium_mg: Math.round(a.items.reduce((x, i) => x + (i.sodium_mg || 0), 0)),
+      potassium_mg: Math.round(a.items.reduce((x, i) => x + (i.potassium_mg || 0), 0)),
       raw_input: 'food-vision',
       parsed_by: 'food-vision',
       user_id: userId,
@@ -357,6 +361,29 @@ function EditItemModal({
   const [p, setP] = useState(String(item.protein_g))
   const [c, setC] = useState(String(item.carbs_g))
   const [f, setF] = useState(String(item.fat_g))
+  const [recalcing, setRecalcing] = useState(false)
+
+  // Fixed the name (e.g. cashews -> potatoes)? Re-estimate macros for the corrected food.
+  async function recalcFromName() {
+    if (!name.trim() || recalcing) return
+    setRecalcing(true)
+    try {
+      const res = await fetch('/api/parse-text', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: `${qty || ''} ${name}`.trim() }),
+      })
+      const data = await res.json()
+      const it = data?.items?.[0]
+      if (it) {
+        setCal(String(Math.round(it.calories || 0)))
+        setP(String(Math.round((it.protein_g || 0) * 10) / 10))
+        setC(String(Math.round((it.carbs_g || 0) * 10) / 10))
+        setF(String(Math.round((it.fat_g || 0) * 10) / 10))
+      }
+    } catch { /* leave fields as-is */ } finally {
+      setRecalcing(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur flex items-end sm:items-center justify-center p-4">
@@ -374,6 +401,14 @@ function EditItemModal({
             </div>
             <Field label="Item" value={name} onChange={setName} />
             <Field label="Portion" value={qty} onChange={setQty} />
+            <button
+              onClick={recalcFromName}
+              disabled={recalcing || !name.trim()}
+              className="w-full text-xs font-semibold py-2 rounded-md bg-violet-500/15 border border-violet-400/40 text-violet-200 hover:bg-violet-500/25 disabled:opacity-40 flex items-center justify-center gap-1.5"
+            >
+              {recalcing ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+              Re-estimate macros from name
+            </button>
             <div className="grid grid-cols-4 gap-2">
               <Field label="kcal" type="number" value={cal} onChange={setCal} />
               <Field label="P (g)" type="number" value={p} onChange={setP} />

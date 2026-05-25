@@ -8,9 +8,9 @@ const anthropic = new Anthropic({
 export const FOOD_ANALYSIS_PROMPT = `Identify all foods and beverages visible. Return ONLY valid JSON:
 {
   "items": [
-    {"name": string, "qty_estimate": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "water_ml": number}
+    {"name": string, "qty_estimate": string, "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "sodium_mg": number, "potassium_mg": number, "water_ml": number}
   ],
-  "total_macros": {"calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "water_ml": number},
+  "total_macros": {"calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "sodium_mg": number, "potassium_mg": number, "water_ml": number},
   "confidence": "high" | "medium" | "low",
   "notes": string
 }
