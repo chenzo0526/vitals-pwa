@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { todayStr, yesterdayStr, logDateLabel } from '@/lib/logDate'
-import { Home, FlaskConical, Sparkles, MoreHorizontal, Plus, Camera, Mic, Dumbbell, TrendingUp, X, Search, CalendarDays } from 'lucide-react'
+import { Home, FlaskConical, Sparkles, MoreHorizontal, Plus, Camera, Mic, Dumbbell, TrendingUp, X, Search, CalendarDays, Leaf } from 'lucide-react'
 
 const TABS = [
   { href: '/', icon: Home, label: 'Home' },
@@ -23,6 +23,7 @@ const LOG_OPTIONS = [
   { href: '/voice', icon: Mic, label: 'Voice Food', color: 'bg-cyan-500/15 border-cyan-400/40 text-cyan-300' },
   { href: '/workout', icon: Dumbbell, label: 'Workout', color: 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300' },
   { href: '/progress', icon: TrendingUp, label: 'Body Check', color: 'bg-rose-500/15 border-rose-400/40 text-rose-300' },
+  { href: '/clean', icon: Leaf, label: 'Food Check', color: 'bg-lime-500/15 border-lime-400/40 text-lime-300' },
 ]
 
 function haptic() {

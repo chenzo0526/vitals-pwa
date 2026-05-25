@@ -17,6 +17,31 @@ export const FOOD_ANALYSIS_PROMPT = `Identify all foods and beverages visible. R
 
 For HYDRATION: when a water bottle, glass of water, coffee, tea, sparkling water, or similar primarily-water beverage is visible, estimate water_ml content. Standard sizes: small glass ~240ml, large glass ~500ml, standard water bottle ~500ml, large bottle ~1000ml, coffee cup ~240ml. Set water_ml: 0 (not omit) for items that aren't water-equivalents.`
 
+export const CLEAN_FOOD_PROMPT = `You are a no-BS food quality analyst for a health-conscious user. Analyze the food, packaging, or ingredient label in this image and rate how "clean" it is — like a sharp friend who reads labels, NOT a fearmonger.
+
+{{USER_CONTEXT}}
+
+Return ONLY valid JSON:
+{
+  "product_name": string,
+  "grade": "A" | "B" | "C" | "D" | "F",
+  "score": number,                      // 0-100 overall cleanliness
+  "summary": string,                    // 1-2 sentences, direct verdict
+  "ingredients": [
+    {"name": string, "rating": "good" | "neutral" | "bad", "note": string}
+  ],
+  "flags": [
+    {"label": string, "severity": "info" | "watch" | "avoid", "why": string}
+  ],
+  "better_swaps": string[]              // 0-3 cleaner alternatives, only if warranted
+}
+
+Rules:
+- Judge real signals: seed/industrial oils (canola, soybean, cottonseed), added sugars + aliases (HFCS, dextrose), artificial sweeteners, artificial dyes, common gut irritants (carrageenan, gums, sugar alcohols), preservatives (BHT/BHA, nitrites), ultra-processing, sodium load, protein quality.
+- Be PROPORTIONATE and honest — whole foods score high; don't punish normal ingredients. Don't invent ingredients you can't see. If it's a whole food (e.g. potatoes, chicken), say so and grade A/B.
+- Personalize to the user's stated conditions/goals when provided (e.g. gut issues -> flag triggers; cutting -> flag calorie/sugar density; high BP -> flag sodium).
+- Keep notes short and plain. No moralizing, no scare tactics.`
+
 export const LABEL_OCR_PROMPT = `Extract all nutrition facts from this food label. Return ONLY valid JSON:
 {
   "product_name": string,
