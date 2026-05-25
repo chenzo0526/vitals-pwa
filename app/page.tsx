@@ -36,7 +36,7 @@ type Today = {
 }
 
 type OpenWorkout = { id: string; focus: string | null; started_at: string }
-type BioSnapshot = { for_date: string; hrv_rmssd: number | null; rhr_bpm: number | null; sleep_total_min: number | null; steps: number | null; active_calories: number | null }
+type BioSnapshot = { for_date: string; hrv_rmssd: number | null; rhr_bpm: number | null; sleep_total_min: number | null; sleep_deep_min: number | null; sleep_rem_min: number | null; steps: number | null; active_calories: number | null }
 type IntakeItem = { id: string; item: string; calories: number | null; protein_g: number | null; carbs_g: number | null; fat_g: number | null; water_ml: number | null; sodium_mg: number | null; potassium_mg: number | null; ts: string }
 type NextScheduledWorkout = { id: string; focus: string | null; scheduled_at: string }
 
@@ -64,6 +64,7 @@ export default function HomePage() {
   const [logSheet, setLogSheet] = useState<null | 'calories' | 'protein' | 'carbs' | 'fat'>(null)
   const [checkedInToday, setCheckedInToday] = useState(true) // assume true until known (avoid flash)
   const [weeklyAvgCals, setWeeklyAvgCals] = useState<number | null>(null)
+  const [streak, setStreak] = useState<number>(0)
 
   useEffect(() => {
     async function fetchAll() {
@@ -118,13 +119,13 @@ export default function HomePage() {
             ? supabase.from('biometric_entries').select('active_calories, for_date').eq('user_id', uid).not('active_calories', 'is', null).gte('for_date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)).order('for_date', { ascending: false }).limit(7)
             : Promise.resolve({ data: null }),
           uid
-            ? supabase.from('biometric_entries').select('for_date, hrv_rmssd, rhr_bpm, sleep_total_min, steps, active_calories').eq('user_id', uid).order('for_date', { ascending: false }).limit(1).maybeSingle()
+            ? supabase.from('biometric_entries').select('for_date, hrv_rmssd, rhr_bpm, sleep_total_min, sleep_deep_min, sleep_rem_min, steps, active_calories').eq('user_id', uid).order('for_date', { ascending: false }).limit(1).maybeSingle()
             : Promise.resolve({ data: null }),
           uid
             ? supabase.from('daily_checkins').select('id').eq('user_id', uid).eq('for_date', dateStr).maybeSingle()
             : Promise.resolve({ data: null }),
           uid
-            ? supabase.from('daily_summary').select('date, calories_total').eq('user_id', uid).gte('date', new Date(Date.now() - 7 * 86400000).toISOString().slice(0,10)).order('date', { ascending: false })
+            ? supabase.from('daily_summary').select('date, calories_total').eq('user_id', uid).gte('date', new Date(Date.now() - 30 * 86400000).toISOString().slice(0,10)).order('date', { ascending: false })
             : Promise.resolve({ data: null }),
         ])
 
@@ -188,10 +189,20 @@ export default function HomePage() {
         }
         setCheckedInToday(!!(checkinTodayRes as { data?: { id: string } | null })?.data)
         const weekRows = ((weekSummaryRes as { data?: Array<{ date: string; calories_total: number | null }> | null })?.data) || []
-        const daysWithIntake = weekRows.filter((r) => (r.calories_total || 0) > 0)
-        if (daysWithIntake.length >= 2) {
-          setWeeklyAvgCals(Math.round(daysWithIntake.reduce((a, r) => a + (r.calories_total || 0), 0) / daysWithIntake.length))
+        const last7 = weekRows.slice(0, 7).filter((r) => (r.calories_total || 0) > 0)
+        if (last7.length >= 2) {
+          setWeeklyAvgCals(Math.round(last7.reduce((a, r) => a + (r.calories_total || 0), 0) / last7.length))
         }
+        // Logging streak: consecutive days (ending today or yesterday) with any food logged.
+        const logged = new Set(weekRows.filter((r) => (r.calories_total || 0) > 0).map((r) => r.date))
+        let st = 0
+        const cur = new Date()
+        // allow today to be unlogged yet without breaking the streak
+        if (!logged.has(cur.toISOString().slice(0, 10))) cur.setDate(cur.getDate() - 1)
+        for (let i = 0; i < 31; i++) {
+          if (logged.has(cur.toISOString().slice(0, 10))) { st++; cur.setDate(cur.getDate() - 1) } else break
+        }
+        setStreak(st)
       } finally {
         setLoading(false)
       }
@@ -351,7 +362,14 @@ export default function HomePage() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-white/50 text-sm">{greeting}, {name}</p>
-          <h1 className="text-2xl font-bold tracking-tight text-white">VITALS</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+            VITALS
+            {streak >= 2 && (
+              <span className="inline-flex items-center gap-0.5 text-sm font-bold text-orange-300 bg-orange-500/15 border border-orange-400/30 rounded-full px-2 py-0.5" title="Logging streak">
+                🔥 {streak}
+              </span>
+            )}
+          </h1>
         </div>
         <div className="flex flex-col items-end gap-1">
           <Badge variant="outline" className="border-amber-400/30 text-amber-400 text-xs tabular-nums">
@@ -560,6 +578,11 @@ export default function HomePage() {
                 <div className="text-center">
                   <p className="text-[9px] uppercase tracking-wider text-white/40">Sleep</p>
                   <p className="text-sm font-bold text-indigo-300 tabular-nums leading-tight">{bio.sleep_total_min != null ? (bio.sleep_total_min/60).toFixed(1) : '—'}<span className="text-[9px] text-white/30 font-normal"> h</span></p>
+                  {(bio.sleep_deep_min != null || bio.sleep_rem_min != null) && (
+                    <p className="text-[8px] text-white/35 tabular-nums leading-tight mt-0.5">
+                      {bio.sleep_deep_min != null && `${Math.round(bio.sleep_deep_min)}m deep`}{bio.sleep_deep_min != null && bio.sleep_rem_min != null && ' · '}{bio.sleep_rem_min != null && `${Math.round(bio.sleep_rem_min)}m REM`}
+                    </p>
+                  )}
                 </div>
                 <div className="text-center">
                   <p className="text-[9px] uppercase tracking-wider text-white/40">Steps</p>
