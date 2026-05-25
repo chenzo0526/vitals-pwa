@@ -1,14 +1,13 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Paths reachable without a session.
 const PUBLIC_PATHS = [
   '/login',
   '/auth/callback',
   '/terms',
   '/privacy',
   '/api/stripe/webhook',
-  // Token-authenticated machine endpoints — these auth via their own token (X-Vitals-Token
-  // / ?token=), NOT a session cookie. Must bypass the login redirect or external POSTs 405.
+  // Token-authenticated machine endpoint (X-Vitals-Token / ?token=), not a session cookie.
   '/api/import-health',
 ]
 
@@ -17,68 +16,47 @@ const PUBLIC_PREFIXES = [
   '/icons',
   '/favicon',
   '/manifest',
+  '/api', // API routes do their OWN auth (server client + getUser, or token). Never gate them in middleware.
 ]
 
-export async function middleware(request: NextRequest) {
+// IMPORTANT: this middleware is intentionally SYNCHRONOUS and makes NO network calls.
+// It previously called supabase.auth.getUser() (a network round-trip to Supabase) on
+// every request, which caused MIDDLEWARE_INVOCATION_TIMEOUT (504) under cold starts /
+// slow auth responses and made every page slow. Real auth is still enforced at the data
+// layer (Postgres RLS) and in server routes/components (which call getUser themselves);
+// this gate is only the login-redirect UX, so a fast cookie-presence check is sufficient.
+export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
-  // Static / always-public — let through without touching auth at all.
-  if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) {
-    return NextResponse.next({ request })
+  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next()
   }
 
-  let response = NextResponse.next({ request })
+  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key',
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          response = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          )
-        },
-      },
-    },
-  )
+  // Fast, local check: does a Supabase auth cookie exist? No network call.
+  const hasAuthCookie = request.cookies
+    .getAll()
+    .some((c) => c.name.startsWith('sb-') && c.name.includes('auth-token') && !!c.value)
 
-  const { data: { user } } = await supabase.auth.getUser()
-
-  const isPublic =
-    PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/')) ||
-    pathname.startsWith('/api/stripe/webhook')
-
-  if (!user && !isPublic) {
+  if (!hasAuthCookie && !isPublic) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     if (pathname !== '/') url.searchParams.set('redirect', pathname)
     return NextResponse.redirect(url)
   }
 
-  // Already signed in and hitting /login → bounce home.
-  if (user && pathname === '/login') {
+  if (hasAuthCookie && pathname === '/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
-  return response
+  return NextResponse.next()
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico, icons, manifest.json
-     */
     '/((?!_next/static|_next/image|favicon.ico|icons|manifest.json).*)',
   ],
 }
