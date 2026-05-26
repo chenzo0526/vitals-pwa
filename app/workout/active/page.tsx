@@ -507,9 +507,18 @@ function ActiveWorkoutInner() {
           {/* Single set entry — log one set at a time. Switch the exercise above anytime (supersets). */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-wider text-white/40 font-bold tabular-nums">
-                {exerciseName ? `${exerciseName} · Set ${nextSetNumber}` : 'Set'}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] uppercase tracking-wider text-white/40 font-bold tabular-nums">
+                  {exerciseName ? `${exerciseName} · Set ${nextSetNumber}` : 'Set'}
+                </p>
+                <button
+                  onClick={() => setIsWarmup((w) => !w)}
+                  className={`text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded border transition-colors ${isWarmup ? 'bg-orange-400/20 border-orange-400/50 text-orange-200' : 'border-white/15 text-white/40 hover:text-white/70'}`}
+                  title="Mark as warm-up (won't count toward PRs/progress)"
+                >
+                  Warm-up
+                </button>
+              </div>
               <button
                 onClick={() => setShowRpe((s) => !s)}
                 className="text-[10px] uppercase tracking-wider text-white/40 hover:text-white/80 flex items-center gap-1"
@@ -563,12 +572,6 @@ function ActiveWorkoutInner() {
                   />
                 </div>
               )}
-              <button
-                onClick={() => setIsWarmup((w) => !w)}
-                className={`w-full text-[11px] uppercase tracking-wider font-bold py-1.5 rounded-md border transition-colors ${isWarmup ? 'bg-orange-400/15 border-orange-400/40 text-orange-200' : 'border-white/10 text-white/40 hover:text-white/70'}`}
-              >
-                {isWarmup ? '🔥 Warm-up set (won\'t count toward PRs/progress)' : 'Mark as warm-up set'}
-              </button>
               <Button
                 onClick={() => logSingleSet(0)}
                 disabled={savingExercise || !exerciseName.trim() || (!draftSets[0]?.weight_lb && !draftSets[0]?.reps)}

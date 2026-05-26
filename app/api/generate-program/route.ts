@@ -76,7 +76,14 @@ export async function POST(req: NextRequest) {
 }
 
 Rules:
-- Design ${daysPerWeek} training days, a ${weeks}-week block. Label days by split (e.g. "Push", "Pull", "Legs", "Upper", "Lower").
+- Design ${daysPerWeek} training days, a ${weeks}-week block. Label days by clear intent (e.g. "Push", "Pull", "Legs", "Upper" — Push/Pull mixed, "Lower").
+- ⚠️ MOVEMENTS MUST MATCH THE DAY'S INTENT. Read your own day label and only place movements that fit:
+  * PUSH / chest / shoulders / triceps days → bench/incline/OH press, dips, flyes, lateral raises, triceps work.
+  * PULL / back / biceps days → rows, pulldowns, pull-ups, face pulls, rear delts, curls. NEVER put bench/incline press/flyes/triceps work here.
+  * LEGS days → squats, RDLs, lunges, hip thrusts, leg press, curls, extensions, calves.
+  * UPPER days (combined push+pull) → mix presses + rows in roughly equal amounts.
+  * LOWER days → quad + posterior chain split.
+  Before finalizing the JSON, RE-READ each day and remove any movement that doesn't belong (e.g. an incline DB press on a "Back" day must be removed/swapped).
 - 3-6 movements per day, 2-4 working sets each. Prioritize the user's weak_points/suggested_focus with extra volume.
 - STARTING WEIGHTS: when an exercise (or a close variant) appears in recent_top_sets, set weight_lb at ~90% of that top set (conservative, leaving reps in reserve for a returning lifter). For new exercises, estimate a sensible starting weight from their bodyweight + the loads they handle on similar lifts. Never prescribe a number you can't justify from their data.
 - progression: most compound lifts "prog":"weight" with "inc": 5 (lb/week); isolation/machine work that's already heavy can use "prog":"reps" with "inc": 1. Keep it sane.

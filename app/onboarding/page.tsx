@@ -404,7 +404,7 @@ export default function OnboardingPage() {
                     onBlur={(e) => setDisplayName(e.target.value)}
                     onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setDisplayName(e.currentTarget.value) }}
                     autoComplete="given-name"
-                    placeholder="Vincenzo"
+                    placeholder="First name"
                     className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                   />
                 </div>
@@ -440,7 +440,7 @@ export default function OnboardingPage() {
                           onChange={(e) => setHeightFt(e.target.value)}
                           onBlur={(e) => setHeightFt(e.target.value)}
                           onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setHeightFt(e.currentTarget.value) }}
-                          placeholder="5"
+                          placeholder="ft"
                           className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-9 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">ft</span>
@@ -451,7 +451,7 @@ export default function OnboardingPage() {
                           onChange={(e) => setHeightIn(e.target.value)}
                           onBlur={(e) => setHeightIn(e.target.value)}
                           onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setHeightIn(e.currentTarget.value) }}
-                          placeholder="10"
+                          placeholder="in"
                           className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-9 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">in</span>
@@ -464,7 +464,7 @@ export default function OnboardingPage() {
                         onChange={(e) => setHeightCm(e.target.value)}
                         onBlur={(e) => setHeightCm(e.target.value)}
                         onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setHeightCm(e.currentTarget.value) }}
-                        placeholder="178"
+                        placeholder="cm (alt)"
                         className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">cm</span>
@@ -491,7 +491,7 @@ export default function OnboardingPage() {
                         onChange={(e) => setWeightLb(e.target.value)}
                         onBlur={(e) => setWeightLb(e.target.value)}
                         onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setWeightLb(e.currentTarget.value) }}
-                        placeholder="180"
+                        placeholder="lb"
                         className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">lb</span>
@@ -503,7 +503,7 @@ export default function OnboardingPage() {
                         onChange={(e) => setWeightKg(e.target.value)}
                         onBlur={(e) => setWeightKg(e.target.value)}
                         onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setWeightKg(e.currentTarget.value) }}
-                        placeholder="82"
+                        placeholder="kg (alt)"
                         className="w-full bg-white/5 border border-white/10 rounded-md pl-3 pr-10 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-white/40 pointer-events-none">kg</span>
@@ -567,7 +567,7 @@ export default function OnboardingPage() {
                     onChange={(e) => setRhythm({ ...rhythm, training_days_per_week: e.target.value })}
                     onBlur={(e) => setRhythm(r => ({ ...r, training_days_per_week: e.target.value }))}
                     onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setRhythm(r => ({ ...r, training_days_per_week: e.currentTarget.value })) }}
-                    placeholder="5"
+                    placeholder="days/wk"
                     className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                   />
                 </div>
@@ -579,7 +579,7 @@ export default function OnboardingPage() {
                     onChange={(e) => setRhythm({ ...rhythm, avg_sleep_hours: e.target.value })}
                     onBlur={(e) => setRhythm(r => ({ ...r, avg_sleep_hours: e.target.value }))}
                     onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setRhythm(r => ({ ...r, avg_sleep_hours: e.currentTarget.value })) }}
-                    placeholder="7.5"
+                    placeholder="hours"
                     className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                   />
                 </div>

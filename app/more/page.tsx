@@ -8,8 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Droplet, Brain, Sliders, CreditCard, Camera, Mic, ScanLine, Dumbbell,
   TrendingUp, History, FileText, Shield, Sparkles, ChevronRight, LogOut, Loader2,
-  Heart,
-} from 'lucide-react'
+  Heart, User } from 'lucide-react'
 import { isTrialing, trialDaysLeft, UserProfile } from '@/lib/tier'
 import { Button } from '@/components/ui/button'
 
@@ -38,6 +37,7 @@ const SECTIONS = [
   {
     title: 'Account',
     items: [
+      { href: '/profile', icon: User, label: 'Profile', desc: 'Name, age, height, weight, goal', accent: 'cyan' },
       { href: '/billing', icon: CreditCard, label: 'Billing & Plan', desc: 'Subscription, payment', accent: 'amber' },
       { href: '/onboarding', icon: Sparkles, label: 'Replay onboarding', desc: 'Re-do the setup wizard', accent: 'violet' },
       { href: '/terms', icon: FileText, label: 'Terms of Service', desc: '', accent: 'slate' },
