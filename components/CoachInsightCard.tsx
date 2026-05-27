@@ -111,24 +111,41 @@ export default function CoachInsightCard() {
     }
   }
 
+  function cacheKey() {
+    return `vitals:coach:${new Date().toISOString().slice(0, 10)}`
+  }
+
   async function fetchCoach(forceRefresh = false) {
     if (forceRefresh) setGenerating(true)
-    else setLoading(true)
+    else if (!data) setLoading(true) // only show skeleton if we have NOTHING to show
     setError(null)
     try {
       const res = await fetch(`/api/coach-today${forceRefresh ? '?refresh=1' : ''}`)
       const json = (await res.json()) as CoachResponse
       if (!res.ok) throw new Error(json.error || 'Coach failed')
       setData(json)
+      try { localStorage.setItem(cacheKey(), JSON.stringify(json)) } catch { /* private mode */ }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load coach')
+      // If we have a cached version showing, don't blow away the UI with an error
+      if (!data) setError(e instanceof Error ? e.message : 'Could not load coach')
     } finally {
       setLoading(false)
       setGenerating(false)
     }
   }
 
-  useEffect(() => { fetchCoach(false); loadPaused() }, [])
+  useEffect(() => {
+    // Stale-while-revalidate: paint cached coach instantly, then refresh in the background.
+    try {
+      const cached = localStorage.getItem(cacheKey())
+      if (cached) {
+        setData(JSON.parse(cached))
+        setLoading(false)
+      }
+    } catch { /* noop */ }
+    fetchCoach(false)
+    loadPaused()
+  }, [])
 
   // No insights state — first-time user with no data yet
   const hasInsights = data?.insights && data.insights.length > 0
