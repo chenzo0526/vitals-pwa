@@ -10,14 +10,32 @@ const inter = Inter({
   subsets: ['latin'],
 })
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://vitals-pwa.vercel.app'
+const TAGLINE = 'One AI that reads your food, training, bloodwork & recovery — together.'
+
 export const metadata: Metadata = {
-  title: 'VITALS',
-  description: 'Your personal health intelligence dashboard',
+  metadataBase: new URL(SITE_URL),
+  title: 'VITALS — your body, read as one system',
+  description: TAGLINE,
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'VITALS',
+  },
+  openGraph: {
+    type: 'website',
+    title: 'VITALS — your body, read as one system',
+    description: TAGLINE,
+    siteName: 'VITALS',
+    url: SITE_URL,
+    images: [{ url: '/icons/icon-512.png', width: 512, height: 512, alt: 'VITALS' }],
+  },
+  twitter: {
+    card: 'summary',
+    title: 'VITALS — your body, read as one system',
+    description: TAGLINE,
+    images: ['/icons/icon-512.png'],
   },
 }
 
