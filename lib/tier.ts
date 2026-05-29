@@ -64,12 +64,23 @@ export async function getUserProfile(): Promise<UserProfile | null> {
   return data as UserProfile | null
 }
 
+// Resolve the tier the user should ACTUALLY have right now, accounting for trial expiry.
+// NOTE: gating sites currently read profile.tier directly (which is set to 'pro' at signup
+// and never flipped), so an expired-trial non-payer stays Pro. Adopting this helper at those
+// sites is the fix — gated on the Stripe webhook going live so paid users are detectable.
 export function getEffectiveTier(profile: UserProfile | null): Tier {
   if (!profile) return 'free'
-  if (profile.trial_ends_at && new Date(profile.trial_ends_at) > new Date() && profile.tier === 'pro') {
-    return 'pro'
+  // Active paid subscription → honor the tier they're paying for.
+  if (
+    profile.stripe_subscription_id &&
+    (profile.subscription_status === 'active' || profile.subscription_status === 'trialing')
+  ) {
+    return profile.tier
   }
-  return profile.tier
+  // Still inside the free 14-day Pro trial.
+  if (isTrialing(profile)) return 'pro'
+  // Trial expired and no active paid sub → Free.
+  return 'free'
 }
 
 export function getLimits(tier: Tier) {
