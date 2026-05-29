@@ -92,12 +92,28 @@ export default function ProfilePage() {
       <Card className="border-white/10 bg-white/5">
         <CardContent className="p-4 space-y-3">
           <Field label="Display name">
-            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="First name" className={inputCls} />
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              onBlur={(e) => setDisplayName(e.target.value)}
+              onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setDisplayName(e.currentTarget.value) }}
+              autoComplete="given-name"
+              placeholder="First name"
+              className={inputCls}
+            />
           </Field>
 
           <div className="grid grid-cols-2 gap-2">
             <Field label="Age">
-              <input type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="years" className={inputCls} />
+              <input
+                type="number"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                onBlur={(e) => setAge(e.target.value)}
+                onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setAge(e.currentTarget.value) }}
+                placeholder="years"
+                className={inputCls}
+              />
             </Field>
             <Field label="Sex (for BMR)">
               <select value={sex} onChange={(e) => setSex(e.target.value as 'male' | 'female')} className={inputCls}>
@@ -110,17 +126,17 @@ export default function ProfilePage() {
           <div>
             <p className="text-xs text-white/50 uppercase tracking-wider">Height</p>
             <div className="grid grid-cols-2 gap-2 mt-1">
-              <input type="number" value={heightFt} onChange={(e) => setHeightFt(e.target.value)} placeholder="ft" className={inputCls} />
-              <input type="number" value={heightIn} onChange={(e) => setHeightIn(e.target.value)} placeholder="in" className={inputCls} />
+              <input type="number" value={heightFt} onChange={(e) => setHeightFt(e.target.value)} onBlur={(e) => setHeightFt(e.target.value)} onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setHeightFt(e.currentTarget.value) }} placeholder="ft" className={inputCls} />
+              <input type="number" value={heightIn} onChange={(e) => setHeightIn(e.target.value)} onBlur={(e) => setHeightIn(e.target.value)} onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setHeightIn(e.currentTarget.value) }} placeholder="in" className={inputCls} />
             </div>
           </div>
 
           <Field label="Bodyweight (lb)">
-            <input type="number" value={weightLb} onChange={(e) => setWeightLb(e.target.value)} placeholder="lb" className={inputCls} />
+            <input type="number" value={weightLb} onChange={(e) => setWeightLb(e.target.value)} onBlur={(e) => setWeightLb(e.target.value)} onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setWeightLb(e.currentTarget.value) }} placeholder="lb" className={inputCls} />
           </Field>
 
           <Field label="Training days per week">
-            <input type="number" min={0} max={7} value={trainingDays} onChange={(e) => setTrainingDays(e.target.value)} placeholder="days/wk" className={inputCls} />
+            <input type="number" min={0} max={7} value={trainingDays} onChange={(e) => setTrainingDays(e.target.value)} onBlur={(e) => setTrainingDays(e.target.value)} onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setTrainingDays(e.currentTarget.value) }} placeholder="days/wk" className={inputCls} />
           </Field>
 
           <Field label="Current goal">
