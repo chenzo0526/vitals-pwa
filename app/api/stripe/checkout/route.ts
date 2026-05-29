@@ -11,7 +11,12 @@ export async function POST(req: NextRequest) {
     const priceKey = `${tier}_${interval}` as keyof typeof STRIPE_PRICE_IDS
     const priceId = STRIPE_PRICE_IDS[priceKey]
     if (!priceId) {
-      return NextResponse.json({ error: 'Price not configured. Set STRIPE_PRICE_* env vars.' }, { status: 400 })
+      // Stripe isn't wired up yet (price env vars not set). Reassure rather than dead-end —
+      // testers are on a full Pro trial regardless.
+      return NextResponse.json({
+        error: "Paid plans aren't switched on yet — they go live shortly. You've got full Pro access during your trial in the meantime.",
+        code: 'billing_not_live',
+      }, { status: 503 })
     }
 
     const supabase = getServerClient()
