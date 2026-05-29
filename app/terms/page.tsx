@@ -6,7 +6,7 @@ export default function TermsPage() {
       <p className="text-xs text-white/40">Last updated: {new Date().toLocaleDateString()}</p>
 
       <h2 className="text-lg font-semibold pt-3">1. Acceptance</h2>
-      <p>By accessing or using VITALS ("the Service"), you agree to be bound by these Terms. If you do not agree, do not use the Service.</p>
+      <p>By accessing or using VITALS (&quot;the Service&quot;), you agree to be bound by these Terms. If you do not agree, do not use the Service.</p>
 
       <h2 className="text-lg font-semibold pt-3">2. Not Medical Advice</h2>
       <p>VITALS is a personal information and tracking tool. It is NOT a medical device, clinical service, or substitute for professional medical advice, diagnosis, or treatment. AI-generated insights are informational only.</p>

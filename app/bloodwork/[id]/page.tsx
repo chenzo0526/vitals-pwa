@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { motion, AnimatePresence } from 'framer-motion'
 import { supabase, BloodworkPanel, BloodworkMarker } from '@/lib/supabase'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -100,7 +99,6 @@ const EVIDENCE_DOTS: Record<LifestyleDial['evidence_strength'], string> = {
 
 export default function BloodworkPanelDetailPage() {
   const params = useParams<{ id: string }>()
-  const router = useRouter()
   const panelId = params?.id
 
   const [panel, setPanel] = useState<BloodworkPanel | null>(null)
@@ -200,13 +198,6 @@ export default function BloodworkPanelDetailPage() {
     )
   }
 
-  // Group markers by category for the marker list
-  const markersByCategory = markers.reduce<Record<string, BloodworkMarker[]>>((acc, m) => {
-    const cat = m.category || 'other'
-    if (!acc[cat]) acc[cat] = []
-    acc[cat].push(m)
-    return acc
-  }, {})
   const visibleMarkers = showAllMarkers
     ? markers
     : markers.filter(m => m.flag === 'low' || m.flag === 'high' || m.flag === 'critical').slice(0, 8)

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { supabase, CustomMetricDef, getCurrentUserId } from '@/lib/supabase'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Sliders, Plus, X, Check } from 'lucide-react'
 
 type LogRow = { id: string; metric_id: string; ts: string; value: number | null; value_bool: boolean | null }

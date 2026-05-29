@@ -30,7 +30,7 @@ export default function PrivacyPage() {
       <p>VITALS is for users 18+. We do not knowingly collect data from minors.</p>
 
       <h2 className="text-lg font-semibold pt-3">9. Changes</h2>
-      <p>If we materially change how we use your data, we'll notify you in-app before the change takes effect.</p>
+      <p>If we materially change how we use your data, we&apos;ll notify you in-app before the change takes effect.</p>
 
       <h2 className="text-lg font-semibold pt-3">10. Contact</h2>
       <p>For privacy questions, use the in-app feedback channel.</p>

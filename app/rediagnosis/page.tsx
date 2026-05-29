@@ -256,7 +256,7 @@ export default function RediagnosisPage() {
           <CardContent className="p-6 text-center">
             <Brain className="text-white/20 mx-auto mb-3" size={32} />
             <p className="text-sm text-white/60">No reviews yet.</p>
-            <p className="text-xs text-white/40 mt-1">Tap "Run review" to analyze your last 7 days.</p>
+            <p className="text-xs text-white/40 mt-1">Tap &quot;Run review&quot; to analyze your last 7 days.</p>
           </CardContent>
         </Card>
       )}

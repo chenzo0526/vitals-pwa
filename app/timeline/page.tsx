@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import {
-  BookOpen, Plus, X, Loader2, AlertTriangle, Calendar, Heart, MapPin, Briefcase,
+  BookOpen, Plus, X, Loader2, AlertTriangle, Heart, MapPin, Briefcase,
   Users, Moon, FlaskConical, Dumbbell, AlertOctagon, Plane, Brain, Bandage, Circle, Trash2, Edit3,
 } from 'lucide-react'
 
@@ -194,10 +194,10 @@ export default function TimelinePage() {
           <CardContent className="p-4 space-y-2">
             <p className="text-sm font-bold text-violet-200">Why this matters</p>
             <p className="text-xs text-white/70 leading-relaxed">
-              The body is a result of life. Numbers without context mislead. When your AI Coach or Bloodwork Interpreter reads your data, it now reads it through THIS timeline — so a T crash during a caregiver year doesn't look like primary hypogonadism, and a sleep collapse during a breakup doesn't look like a thyroid problem.
+              The body is a result of life. Numbers without context mislead. When your AI Coach or Bloodwork Interpreter reads your data, it now reads it through THIS timeline — so a T crash during a caregiver year doesn&apos;t look like primary hypogonadism, and a sleep collapse during a breakup doesn&apos;t look like a thyroid problem.
             </p>
             <p className="text-xs text-white/70 leading-relaxed">
-              Log the big events. Cycle ends. Moves. Family illness. Breakups. Travel. Injuries. Anything that shaped a chunk of your data window. Be honest with the AI — be more honest than you'd be with a doctor.
+              Log the big events. Cycle ends. Moves. Family illness. Breakups. Travel. Injuries. Anything that shaped a chunk of your data window. Be honest with the AI — be more honest than you&apos;d be with a doctor.
             </p>
           </CardContent>
         </Card>

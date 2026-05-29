@@ -213,7 +213,7 @@ export default function JournalPage() {
             <Sparkles className="text-violet-400" size={20} /> Daily check-in
           </h1>
           <p className="text-[11px] text-white/50 mt-0.5">
-            Talk for 30 seconds. AI captures mood / energy / sleep / training / what's on your mind.
+            Talk for 30 seconds. AI captures mood / energy / sleep / training / what&apos;s on your mind.
           </p>
         </div>
         <button
@@ -298,7 +298,7 @@ export default function JournalPage() {
 
             {!supported && (
               <p className="text-[10px] text-amber-300/70">
-                Voice input isn't available on this browser — type into the box above and hit Save.
+                Voice input isn&apos;t available on this browser — type into the box above and hit Save.
               </p>
             )}
             {permissionDenied && (
