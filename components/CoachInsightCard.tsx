@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Sparkles, Loader2, RefreshCw, AlertTriangle, ChevronRight, Brain, Dumbbell, FlaskConical, Heart, Apple, Camera, Activity, BellOff, Check, Bell } from 'lucide-react'
@@ -207,10 +208,29 @@ export default function CoachInsightCard() {
           </button>
         </div>
 
-        {/* Insights */}
+        {/* Insights — empty state teaches what the coach does + drops you straight into a real answer */}
         {!hasInsights && !generating && (
-          <div className="text-center py-3">
-            <p className="text-xs text-white/50">No insights yet. Log your stack + a meal to unlock today&apos;s read.</p>
+          <div className="py-1 space-y-2.5">
+            <p className="text-[12px] text-white/60 leading-relaxed">
+              Your coach reads your food, training, recovery, bloodwork and stack <span className="text-white/80 font-semibold">together</span> — one daily read no single tracker can give you. Log a day and it sharpens. Or ask it something right now:
+            </p>
+            <div className="space-y-1.5">
+              {[
+                { q: 'What should I eat today to hit my goal?', label: 'What should I eat today to hit my goal?' },
+                { q: 'Should I train today, or rest?', label: 'Should I train today, or rest?' },
+                { q: 'What can you do for me?', label: 'What can you actually do for me?' },
+              ].map(({ q, label }) => (
+                <Link
+                  key={q}
+                  href={`/chat?q=${encodeURIComponent(q)}`}
+                  className="flex items-center gap-2 w-full text-left rounded-lg border border-amber-400/25 bg-amber-400/[0.04] px-3 py-2 hover:bg-amber-400/[0.09] transition-colors active:scale-[0.99]"
+                >
+                  <Sparkles size={12} className="text-amber-400 flex-shrink-0" />
+                  <span className="text-[12px] text-white/85 flex-1 min-w-0">{label}</span>
+                  <ChevronRight size={13} className="text-white/30 flex-shrink-0" />
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 

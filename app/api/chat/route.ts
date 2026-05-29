@@ -313,6 +313,11 @@ ${JSON.stringify(context, null, 2)}`
     return NextResponse.json({ reply: finalText || 'Done.', actions })
   } catch (err) {
     console.error('[chat] error:', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Chat failed' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : 'Chat failed'
+    const low = /credit balance|insufficient_quota|rate_limit|overloaded/i.test(msg)
+    const friendly = low
+      ? "I'm out of AI credit right now — top up at console.anthropic.com and I'll be back. (Your logs are safe.)"
+      : "I hit a snag on that one. Give me another shot in a sec."
+    return NextResponse.json({ error: friendly, code: low ? 'ai_credit' : 'ai_error' }, { status: 503 })
   }
 }

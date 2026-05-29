@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { ChevronLeft, Send, Mic, MicOff, Sparkles, Loader2, Check } from 'lucide-react'
 
 type Msg = { role: 'user' | 'assistant'; content: string; actions?: string[] }
@@ -15,6 +16,15 @@ const SUGGESTIONS = [
 ]
 
 export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 size={18} className="animate-spin text-amber-400" /></div>}>
+      <ChatInner />
+    </Suspense>
+  )
+}
+
+function ChatInner() {
+  const params = useSearchParams()
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -22,10 +32,23 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
+  const autoSentRef = useRef(false)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, sending])
+
+  // Deep-link auto-send: /chat?q=<prompt> fires the question immediately so a tap
+  // from the home Coach card or a suggestion chip lands straight in a real answer.
+  useEffect(() => {
+    if (autoSentRef.current) return
+    const q = params.get('q')
+    if (q && q.trim()) {
+      autoSentRef.current = true
+      send(q)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params])
 
   async function send(text: string) {
     const trimmed = text.trim()
@@ -41,10 +64,11 @@ export default function ChatPage() {
         body: JSON.stringify({ messages: next.map((m) => ({ role: m.role, content: m.content })) }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Failed')
+      if (!res.ok) throw new Error(json.error || "I hit a snag. Give me another shot in a sec.")
       setMessages((m) => [...m, { role: 'assistant', content: json.reply, actions: json.actions }])
     } catch (e) {
-      setMessages((m) => [...m, { role: 'assistant', content: `Hit a snag: ${e instanceof Error ? e.message : 'try again'}.` }])
+      // Server returns a friendly, user-facing message (incl. out-of-credit) — show it as-is.
+      setMessages((m) => [...m, { role: 'assistant', content: e instanceof Error ? e.message : "I hit a snag. Try that again in a sec." }])
     } finally {
       setSending(false)
     }
