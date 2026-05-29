@@ -7,6 +7,7 @@ import {
   type LabeledImage,
   type AngleLabel,
 } from '@/lib/claude'
+import { friendlyAiError } from '@/lib/aiError'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -64,6 +65,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(JSON.parse(jsonMatch[0]))
   } catch (err) {
     console.error('[analyze-physique] error:', err)
-    return NextResponse.json({ error: 'Failed to analyze physique. Please try again.' }, { status: 500 })
+    const ai = friendlyAiError(err, 'analyze those photos')
+    return NextResponse.json({ error: ai.message, code: ai.code }, { status: ai.status })
   }
 }

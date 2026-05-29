@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { friendlyAiError } from '@/lib/aiError'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -149,6 +150,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, results, count: results.length })
   } catch (err) {
     console.error('[search-food] error:', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Search failed' }, { status: 500 })
+    const ai = friendlyAiError(err, 'search that food')
+    return NextResponse.json({ error: ai.message, code: ai.code }, { status: ai.status })
   }
 }

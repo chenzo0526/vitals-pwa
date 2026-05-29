@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseTextWithClaude } from '@/lib/claude'
+import { friendlyAiError } from '@/lib/aiError'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(JSON.parse(jsonMatch[0]))
   } catch (err) {
     console.error('[parse-text] error:', err)
-    return NextResponse.json({ error: 'Failed to parse meal. Please try again.' }, { status: 500 })
+    const ai = friendlyAiError(err, 'log that meal')
+    return NextResponse.json({ error: ai.message, code: ai.code }, { status: ai.status })
   }
 }

@@ -4,6 +4,7 @@ import {
   analyzePdfWithClaude,
   BLOODWORK_PARSE_PROMPT,
 } from '@/lib/claude'
+import { friendlyAiError } from '@/lib/aiError'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error('[parse-bloodwork] error:', err)
-    const msg = err instanceof Error ? err.message : 'Failed to parse bloodwork. Please try again.'
-    return NextResponse.json({ error: msg }, { status: 500 })
+    const ai = friendlyAiError(err, 'read your bloodwork')
+    return NextResponse.json({ error: ai.message, code: ai.code }, { status: ai.status })
   }
 }

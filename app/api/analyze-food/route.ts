@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeImageWithClaude, FOOD_ANALYSIS_PROMPT } from '@/lib/claude'
+import { friendlyAiError } from '@/lib/aiError'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(JSON.parse(jsonMatch[0]))
   } catch (err) {
     console.error('[analyze-food] error:', err)
-    return NextResponse.json({ error: 'Failed to analyze food image. Please try again.' }, { status: 500 })
+    const ai = friendlyAiError(err, 'analyze that photo')
+    return NextResponse.json({ error: ai.message, code: ai.code }, { status: ai.status })
   }
 }

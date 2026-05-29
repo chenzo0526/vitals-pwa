@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { generateBloodworkInterpretation } from '@/lib/claude'
+import { friendlyAiError } from '@/lib/aiError'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -213,6 +214,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error('[interpret-bloodwork] error:', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Interpreter failed' }, { status: 500 })
+    const ai = friendlyAiError(err, 'interpret this panel')
+    return NextResponse.json({ error: ai.message, code: ai.code }, { status: ai.status })
   }
 }

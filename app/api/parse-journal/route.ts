@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { parseDailyCheckin } from '@/lib/claude'
+import { friendlyAiError } from '@/lib/aiError'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -93,6 +94,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error('[parse-journal] error:', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Journal parsing failed' }, { status: 500 })
+    const ai = friendlyAiError(err, 'parse your check-in')
+    return NextResponse.json({ error: ai.message, code: ai.code }, { status: ai.status })
   }
 }

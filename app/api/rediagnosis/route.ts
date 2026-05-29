@@ -4,6 +4,7 @@ import { generateRecommendationWithClaude } from '@/lib/claude'
 import { TIER_LIMITS } from '@/lib/tier'
 import { DISCLAIMER_VERSION, RECOMMENDATION_DISCLAIMER } from '@/lib/disclaimer'
 import { getLocalDateString } from '@/lib/dates'
+import { friendlyAiError } from '@/lib/aiError'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -141,6 +142,7 @@ User tier: ${tier}. Today: ${getLocalDateString(new Date(), timezone)}.`
     return NextResponse.json({ report_id: report?.id, ...parsed, model_used: model, tier_at_time: tier })
   } catch (err) {
     console.error('[rediagnosis] error:', err)
-    return NextResponse.json({ error: 'Failed to generate review. Please try again.' }, { status: 500 })
+    const ai = friendlyAiError(err, 'run your review')
+    return NextResponse.json({ error: ai.message, code: ai.code }, { status: ai.status })
   }
 }
