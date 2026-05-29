@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { friendlyAiError } from '@/lib/aiError'
+import { getServerUser } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -92,6 +93,7 @@ async function estimateFoodWithClaude(query: string) {
 
 export async function GET(req: NextRequest) {
   try {
+    if (!(await getServerUser())) return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 })
     const url = new URL(req.url)
     const query = url.searchParams.get('q')?.trim()
     if (!query) {

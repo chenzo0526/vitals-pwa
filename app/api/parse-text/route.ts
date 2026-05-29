@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseTextWithClaude } from '@/lib/claude'
 import { friendlyAiError } from '@/lib/aiError'
+import { getServerUser } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await getServerUser())) return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 })
     const { text } = await req.json()
     if (!text) return NextResponse.json({ error: 'No text provided' }, { status: 400 })
 

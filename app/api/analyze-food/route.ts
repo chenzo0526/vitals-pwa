@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { analyzeImageWithClaude, FOOD_ANALYSIS_PROMPT } from '@/lib/claude'
 import { friendlyAiError } from '@/lib/aiError'
+import { getServerUser } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await getServerUser())) return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 })
     const { image, mediaType } = await req.json()
     if (!image) return NextResponse.json({ error: 'No image provided' }, { status: 400 })
 

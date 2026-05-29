@@ -8,6 +8,7 @@ import {
   type AngleLabel,
 } from '@/lib/claude'
 import { friendlyAiError } from '@/lib/aiError'
+import { getServerUser } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,6 +23,7 @@ type IncomingImage = {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!(await getServerUser())) return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 })
     const body = await req.json()
 
     // New multi-angle path: { images: [{ angle, image, mediaType }, ...] }
