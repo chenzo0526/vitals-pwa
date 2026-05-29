@@ -9,30 +9,31 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   try {
+    // Auth gate — Claude vision is expensive; don't leave this open to credit-drain.
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } },
+    )
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Sign in to use this.' }, { status: 401 })
+
     const { image, mediaType } = await req.json()
     if (!image) return NextResponse.json({ error: 'No image provided' }, { status: 400 })
 
     // Pull the user's goals/conditions to personalize the analysis (best-effort).
     let userContext = 'No specific conditions provided — analyze generally for a health-conscious adult.'
     try {
-      const cookieStore = await cookies()
-      const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } },
-      )
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: onb } = await supabase
-          .from('onboarding_progress').select('first_goal, identity_data').eq('user_id', user.id).maybeSingle()
-        const goal = onb?.first_goal
-        const conditions = (onb?.identity_data as { conditions?: string; health_notes?: string } | null)
-        const bits: string[] = []
-        if (goal) bits.push(`Goal: ${goal}.`)
-        if (conditions?.conditions) bits.push(`Conditions: ${conditions.conditions}.`)
-        if (conditions?.health_notes) bits.push(`Notes: ${conditions.health_notes}.`)
-        if (bits.length) userContext = `USER CONTEXT — personalize flags to this: ${bits.join(' ')}`
-      }
+      const { data: onb } = await supabase
+        .from('onboarding_progress').select('first_goal, identity_data').eq('user_id', user.id).maybeSingle()
+      const goal = onb?.first_goal
+      const conditions = (onb?.identity_data as { conditions?: string; health_notes?: string } | null)
+      const bits: string[] = []
+      if (goal) bits.push(`Goal: ${goal}.`)
+      if (conditions?.conditions) bits.push(`Conditions: ${conditions.conditions}.`)
+      if (conditions?.health_notes) bits.push(`Notes: ${conditions.health_notes}.`)
+      if (bits.length) userContext = `USER CONTEXT — personalize flags to this: ${bits.join(' ')}`
     } catch { /* personalization is best-effort */ }
 
     const prompt = CLEAN_FOOD_PROMPT.replace('{{USER_CONTEXT}}', userContext)
