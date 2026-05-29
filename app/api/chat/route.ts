@@ -101,7 +101,10 @@ export async function POST(req: NextRequest) {
     const incoming: ChatMsg[] = Array.isArray(body?.messages) ? body.messages.slice(-20) : []
     if (incoming.length === 0) return NextResponse.json({ error: 'No messages' }, { status: 400 })
 
-    const tz = 'America/Los_Angeles'
+    // Use the user's real timezone so "today's" intake bucket is correct near midnight
+    // (was hardcoded Pacific — wrong for testers in other zones). Matches coach-today.
+    const { data: tzProfile } = await supabase.from('user_profile').select('timezone').eq('id', userId).maybeSingle()
+    const tz = (tzProfile as { timezone?: string } | null)?.timezone || 'America/Los_Angeles'
     const todayLocal = new Date().toLocaleDateString('en-CA', { timeZone: tz })
     const sevenDaysAgoIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const startOfTodayIso = new Date(`${todayLocal}T00:00:00`).toISOString()
