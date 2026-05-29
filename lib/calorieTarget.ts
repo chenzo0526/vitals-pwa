@@ -5,6 +5,23 @@
 export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'
 export type CalorieGoal = 'aggressive_cut' | 'moderate_cut' | 'maintain' | 'lean_bulk' | 'aggressive_bulk'
 
+// Canonical goal inference from the user's free-text first_goal. ONE copy — home, the coach,
+// and the chat agent all call this so the calorie target never disagrees across surfaces.
+// Safer default: a plain "lose/drop 5 lb" is a MODERATE cut (-400), not aggressive (-600).
+// Aggressive is reserved for explicit aggression ("aggressive cut", "crash") or a genuinely
+// large target (≥15 lb). Same logic mirrored for bulks.
+export function inferCalorieGoal(text: string | null | undefined): CalorieGoal {
+  if (!text) return 'maintain'
+  const t = text.toLowerCase()
+  // Cuts — explicit aggression or a big number first, else moderate.
+  if (/aggressive\s*cut|crash\s*diet|cut\s*hard|(?:lose|drop)\s*(?:1[5-9]|[2-9]\d)\s*lb/.test(t)) return 'aggressive_cut'
+  if (/\bcut\b|\blose\b|\bdrop\b|lean\s*out|\bshred|fat\s*loss/.test(t)) return 'moderate_cut'
+  // Bulks — same shape.
+  if (/aggressive\s*bulk|mass\s*gain|gain\s*(?:1[5-9]|[2-9]\d)\s*lb/.test(t)) return 'aggressive_bulk'
+  if (/\bbulk\b|\bgain\b|jacked|build\s*muscle|add\s*size|recomp/.test(t)) return 'lean_bulk'
+  return 'maintain'
+}
+
 export type CalorieTargetInputs = {
   age: number | null
   sex: 'male' | 'female'

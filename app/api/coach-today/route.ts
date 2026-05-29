@@ -2,18 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { generateCoachInsights } from '@/lib/claude'
-import { computeCalorieTarget } from '@/lib/calorieTarget'
-import type { CalorieGoal } from '@/lib/calorieTarget'
-
-function inferCalorieGoalFromText(text: string | null | undefined): CalorieGoal {
-  if (!text) return 'maintain'
-  const t = text.toLowerCase()
-  if (/aggressive\s*cut|drop\s*\d+\s*lb|lose\s*\d+\s*lb|cut\s*hard|crash\s*diet/.test(t)) return 'aggressive_cut'
-  if (/\bcut\b|\blose\b|\bdrop\b|\blean\s*out|\bshred|fat\s*loss/.test(t)) return 'moderate_cut'
-  if (/aggressive\s*bulk|mass\s*gain|gain\s*\d+\s*lb/.test(t)) return 'aggressive_bulk'
-  if (/\bbulk\b|\bgain\b|jacked|build\s*muscle|add\s*size|recomp/.test(t)) return 'lean_bulk'
-  return 'maintain'
-}
+import { computeCalorieTarget, inferCalorieGoal } from '@/lib/calorieTarget'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -155,7 +144,7 @@ export async function GET(req: NextRequest) {
     const rhythm = (onboardingRes.data?.rhythm_data || {}) as Record<string, unknown>
 
     // Compute calorie target so Coach can talk in real numbers, not abstract deficit advice
-    const inferredGoal = inferCalorieGoalFromText(onboardingRes.data?.first_goal ?? null)
+    const inferredGoal = inferCalorieGoal(onboardingRes.data?.first_goal ?? null)
     const calTarget = computeCalorieTarget({
       age: identity.age ? Number(identity.age) : null,
       sex: 'male',

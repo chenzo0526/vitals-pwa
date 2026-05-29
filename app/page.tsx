@@ -14,22 +14,10 @@ import { celebrate } from '@/lib/celebrate'
 import { yesterdayStr } from '@/lib/logDate'
 import { Skeleton, SkeletonCard } from '@/components/Skeleton'
 import CoachInsightCard from '@/components/CoachInsightCard'
-import { computeCalorieTarget } from '@/lib/calorieTarget'
-import type { CalorieGoal, CalorieTargetResult } from '@/lib/calorieTarget'
+import { computeCalorieTarget, inferCalorieGoal } from '@/lib/calorieTarget'
+import type { CalorieTargetResult } from '@/lib/calorieTarget'
 
 const DEFAULT_GOALS = { calories: 2400, protein_g: 180, carbs_g: 250, fat_g: 80, water_ml: 3000 }
-
-// Infer calorie goal from the user's stated first_goal text (best-effort heuristic).
-// User can override via /more later. Defaults to maintain.
-function inferCalorieGoalFromText(text: string | null | undefined): CalorieGoal {
-  if (!text) return 'maintain'
-  const t = text.toLowerCase()
-  if (/aggressive\s*cut|drop\s*\d+\s*lb|lose\s*\d+\s*lb|cut\s*hard|crash\s*diet/.test(t)) return 'aggressive_cut'
-  if (/\bcut\b|\blose\b|\bdrop\b|\blean\s*out|\bshred|fat\s*loss/.test(t)) return 'moderate_cut'
-  if (/aggressive\s*bulk|mass\s*gain|gain\s*\d+\s*lb/.test(t)) return 'aggressive_bulk'
-  if (/\bbulk\b|\bgain\b|jacked|build\s*muscle|add\s*size|recomp/.test(t)) return 'lean_bulk'
-  return 'maintain'
-}
 
 type Today = {
   calories_total: number; protein_g_total: number; carbs_g_total: number; fat_g_total: number; water_ml_total: number
@@ -160,7 +148,7 @@ export default function HomePage() {
         // Compute personalized calorie target from profile data
         const identity = ((onbRes.data as { identity_data?: Record<string, unknown> } | null)?.identity_data || {}) as Record<string, unknown>
         const rhythm = ((onbRes.data as { rhythm_data?: Record<string, unknown> } | null)?.rhythm_data || {}) as Record<string, unknown>
-        const inferredGoal = inferCalorieGoalFromText((onbRes.data as { first_goal?: string } | null)?.first_goal ?? null)
+        const inferredGoal = inferCalorieGoal((onbRes.data as { first_goal?: string } | null)?.first_goal ?? null)
         // Roll up average daily ACTIVE (move) calories from the wearable. TDEE is then
         // computed as BMR + this avg (robust vs Apple's double-counted total energy).
         // Skip today (incomplete day). Clamp per-day to ignore obvious double-count spikes.

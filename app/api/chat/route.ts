@@ -2,22 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Anthropic from '@anthropic-ai/sdk'
-import { computeCalorieTarget, type CalorieGoal } from '@/lib/calorieTarget'
+import { computeCalorieTarget, inferCalorieGoal } from '@/lib/calorieTarget'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' })
-
-function inferGoal(text: string | null | undefined): CalorieGoal {
-  if (!text) return 'maintain'
-  const t = text.toLowerCase()
-  if (/aggressive\s*cut|crash/.test(t)) return 'aggressive_cut'
-  if (/\bcut\b|\blose\b|\bdrop\b|lean\s*out|shred|fat\s*loss/.test(t)) return 'moderate_cut'
-  if (/aggressive\s*bulk|mass/.test(t)) return 'aggressive_bulk'
-  if (/\bbulk\b|\bgain\b|jacked|build\s*muscle|add\s*size|recomp/.test(t)) return 'lean_bulk'
-  return 'maintain'
-}
 
 async function getSupabase() {
   const cookieStore = await cookies()
@@ -133,7 +123,7 @@ export async function POST(req: NextRequest) {
 
     const identity = (onbRes.data?.identity_data || {}) as Record<string, unknown>
     const rhythm = (onbRes.data?.rhythm_data || {}) as Record<string, unknown>
-    const goal = inferGoal(onbRes.data?.first_goal)
+    const goal = inferCalorieGoal(onbRes.data?.first_goal)
 
     // wearable active avg (clamped, excl today)
     const bioWeek = (bioWeekRes.data || []) as Array<{ for_date: string; active_calories: number | null }>
