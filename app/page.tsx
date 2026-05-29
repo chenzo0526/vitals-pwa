@@ -53,6 +53,7 @@ export default function HomePage() {
   const [checkedInToday, setCheckedInToday] = useState(true) // assume true until known (avoid flash)
   const [weeklyAvgCals, setWeeklyAvgCals] = useState<number | null>(null)
   const [streak, setStreak] = useState<number>(0)
+  const [loggedYesterday, setLoggedYesterday] = useState(true) // assume true until known (avoid catch-up flash)
 
   useEffect(() => {
     async function fetchAll() {
@@ -183,6 +184,7 @@ export default function HomePage() {
         }
         // Logging streak: consecutive days (ending today or yesterday) with any food logged.
         const logged = new Set(weekRows.filter((r) => (r.calories_total || 0) > 0).map((r) => r.date))
+        setLoggedYesterday(logged.has(yesterdayStr()))
         let st = 0
         const cur = new Date()
         // allow today to be unlogged yet without breaking the streak
@@ -582,8 +584,9 @@ export default function HomePage() {
         </Link>
       )}
 
-      {/* Forgot to log yesterday? One-tap catch-up. Keeps the coach's data honest. */}
-      {!needsOnboarding && (
+      {/* Forgot to log yesterday? One-tap catch-up — only when yesterday is actually empty,
+          so we don't nag someone who already logged. Keeps the coach's data honest. */}
+      {!needsOnboarding && !loading && !loggedYesterday && (
         <Link
           href={`/food-search?date=${yesterdayStr()}`}
           className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 hover:bg-white/[0.06] transition-colors active:scale-[0.99]"
