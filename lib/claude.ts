@@ -453,7 +453,9 @@ Return ONLY valid JSON:
 
 export async function parseDailyCheckin(
   transcript: string,
-  model: string = 'claude-sonnet-4-5'
+  // Structured extraction (transcript → mood/energy/sleep fields), not synthesis —
+  // runs on Haiku for speed + cost, matching parseText/parseWorkout. High-frequency path.
+  model: string = 'claude-haiku-4-5-20251001'
 ): Promise<string> {
   const response = await anthropic.messages.create({
     model,
