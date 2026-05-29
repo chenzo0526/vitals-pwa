@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Droplet, Brain, Sliders, CreditCard, Camera, Mic, ScanLine, Dumbbell,
   TrendingUp, History, FileText, Shield, Sparkles, ChevronRight, LogOut, Loader2,
-  Heart, User } from 'lucide-react'
+  Heart, User, Leaf } from 'lucide-react'
 import { isTrialing, trialDaysLeft, UserProfile } from '@/lib/tier'
 import { Button } from '@/components/ui/button'
 
@@ -26,7 +26,9 @@ const SECTIONS = [
   {
     title: 'Quick log',
     items: [
+      { href: '/chat', icon: Sparkles, label: 'Ask Vitals', desc: 'Talk to log · ask anything', accent: 'amber' },
       { href: '/food', icon: Camera, label: 'Snap Plate', desc: 'Food vision', accent: 'amber' },
+      { href: '/clean', icon: Leaf, label: 'Food Check', desc: 'Clean/dirty read on a label or plate', accent: 'green' },
       { href: '/label', icon: ScanLine, label: 'Scan Label', desc: 'Nutrition OCR', accent: 'cyan' },
       { href: '/voice', icon: Mic, label: 'Log Voice', desc: 'Voice food parsing', accent: 'violet' },
       { href: '/workout', icon: Dumbbell, label: 'Lift', desc: 'Sets, reps, RPE', accent: 'green' },
