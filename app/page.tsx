@@ -490,7 +490,7 @@ export default function HomePage() {
             <CardContent className="p-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold">Finish setting up VITALS</p>
-                <p className="text-[11px] text-white/60">7-step onboarding · ~6 min</p>
+                <p className="text-[11px] text-white/60">~2 min to your first read · skip anything optional</p>
               </div>
               <ChevronRight className="text-amber-400" size={20} />
             </CardContent>

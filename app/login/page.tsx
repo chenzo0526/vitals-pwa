@@ -154,7 +154,9 @@ function LoginInner() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <h1 className="text-3xl font-bold tracking-tight text-white">VITALS</h1>
-          <p className="text-white/50 text-sm mt-1">Personal health intelligence</p>
+          <p className="text-white/55 text-sm mt-1.5 leading-snug max-w-[18rem] mx-auto">
+            One AI that reads your food, training, bloodwork &amp; recovery <span className="text-white/80 font-semibold">together</span>.
+          </p>
         </div>
 
         <Card className="border-white/10 bg-white/5 overflow-hidden">
