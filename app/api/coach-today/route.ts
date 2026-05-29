@@ -320,6 +320,11 @@ export async function GET(req: NextRequest) {
     })
   } catch (err) {
     console.error('[coach-today] error:', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Coach failed' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : 'Coach failed'
+    const low = /credit balance|insufficient_quota|rate_limit|overloaded/i.test(msg)
+    const friendly = low
+      ? "Your AI service is out of credit or rate-limited — top up at console.anthropic.com to restore the coach."
+      : "AI coach is temporarily unavailable. Try again in a moment."
+    return NextResponse.json({ error: friendly, code: low ? 'ai_credit' : 'ai_error' }, { status: 503 })
   }
 }

@@ -167,7 +167,7 @@ export default function CoachInsightCard() {
         <CardContent className="p-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <AlertTriangle size={16} className="text-rose-400 flex-shrink-0" />
-            <p className="text-xs text-rose-200 truncate">{error}</p>
+            <p className="text-xs text-rose-200 line-clamp-3 leading-snug">{error?.slice(0, 240)}</p>
           </div>
           <button
             onClick={() => fetchCoach(true)}

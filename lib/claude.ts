@@ -271,7 +271,7 @@ export async function analyzeMultipleImagesWithClaude(
 
 export async function parseTextWithClaude(text: string): Promise<string> {
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 1024,
     temperature: 0.2,
     system: VOICE_FOOD_PARSE_SYSTEM,
@@ -289,7 +289,7 @@ export async function parseTextWithClaude(text: string): Promise<string> {
 
 export async function parseWorkoutWithClaude(text: string): Promise<string> {
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 512,
     messages: [
       {

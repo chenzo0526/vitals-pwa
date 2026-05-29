@@ -54,7 +54,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || '' })
 async function estimateFoodWithClaude(query: string) {
   try {
     const resp = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 700,
       temperature: 0.2,
       system: 'You are a nutrition database. Return ONLY valid JSON: {"results":[{"name":string,"per_amount":string,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"water_ml":number}]}. CRITICAL: every result MUST be the food the user actually searched for (or an obvious variant of it) — NEVER substitute an unrelated food. If the query is a restaurant/composite dish (e.g. "spicy tuna roll", "chicken burrito"), estimate THAT dish at a realistic serving. 1-3 matches. Realistic macros. No prose.',
