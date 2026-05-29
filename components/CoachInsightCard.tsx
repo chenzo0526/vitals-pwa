@@ -223,7 +223,7 @@ export default function CoachInsightCard() {
                 <Link
                   key={q}
                   href={`/chat?q=${encodeURIComponent(q)}`}
-                  className="flex items-center gap-2 w-full text-left rounded-lg border border-amber-400/25 bg-amber-400/[0.04] px-3 py-2 hover:bg-amber-400/[0.09] transition-colors active:scale-[0.99]"
+                  className="flex items-center gap-2 w-full text-left rounded-lg border border-amber-400/25 bg-amber-400/[0.04] px-3 py-2.5 min-h-[44px] hover:bg-amber-400/[0.09] transition-colors active:scale-[0.99]"
                 >
                   <Sparkles size={12} className="text-amber-400 flex-shrink-0" />
                   <span className="text-[12px] text-white/85 flex-1 min-w-0">{label}</span>
