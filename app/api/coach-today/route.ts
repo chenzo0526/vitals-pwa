@@ -143,6 +143,23 @@ export async function GET(req: NextRequest) {
     const identity = (onboardingRes.data?.identity_data || {}) as Record<string, unknown>
     const rhythm = (onboardingRes.data?.rhythm_data || {}) as Record<string, unknown>
 
+    // Cold start: a brand-new user has logged nothing yet. A coach insight needs ≥2 data
+    // sources to connect — impossible with zero activity — and a Sonnet call here would only
+    // produce generic filler. Bail with empty insights so the home Coach card shows its
+    // teaching + agent chips instead. Don't cache (so it regenerates the moment they log).
+    const hasAnyActivity =
+      (substancesRes.data?.length ?? 0) > 0 ||
+      (bloodworkPanelsRes.data?.length ?? 0) > 0 ||
+      (recentIntakeRes.data?.length ?? 0) > 0 ||
+      (recentWorkoutsRes.data?.length ?? 0) > 0 ||
+      (recentCheckinsRes.data?.length ?? 0) > 0 ||
+      (recentBiometricsRes.data?.length ?? 0) > 0 ||
+      Boolean(latestPhysiqueRes.data) ||
+      Boolean(dailySummaryTodayRes.data)
+    if (!hasAnyActivity) {
+      return NextResponse.json({ cached: false, generated_at: new Date().toISOString(), insights: [] })
+    }
+
     // Compute calorie target so Coach can talk in real numbers, not abstract deficit advice
     const inferredGoal = inferCalorieGoal(onboardingRes.data?.first_goal ?? null)
     const calTarget = computeCalorieTarget({
