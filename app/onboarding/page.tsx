@@ -51,6 +51,7 @@ export default function OnboardingPage() {
 
   const [displayName, setDisplayName] = useState('')
   const [age, setAge] = useState('')
+  const [sex, setSex] = useState<'male' | 'female'>('male')
   const [heightUnit, setHeightUnit] = useState<HeightUnit>('imperial')
   const [heightFt, setHeightFt] = useState('')
   const [heightIn, setHeightIn] = useState('')
@@ -91,6 +92,7 @@ export default function OnboardingPage() {
           const d = prog.identity_data as Record<string, unknown>
           if (d.display_name) setDisplayName(String(d.display_name))
           if (d.age != null) setAge(String(d.age))
+          if (d.sex === 'female' || d.sex === 'male') setSex(d.sex)
           if (d.height_cm != null) setHeightCm(String(d.height_cm))
           if (d.weight_kg != null) setWeightKg(String(d.weight_kg))
           if (d.height_unit_pref === 'imperial' || d.height_unit_pref === 'metric') {
@@ -179,6 +181,7 @@ export default function OnboardingPage() {
       update.identity_data = {
         display_name: displayName,
         age: age ? Number(age) : null,
+        sex,
         height_cm: computedHeightCm,
         weight_kg: computedWeightKg,
         height_unit_pref: heightUnit,
@@ -246,6 +249,7 @@ export default function OnboardingPage() {
     const identityData = {
       display_name: displayName,
       age: age ? Number(age) : null,
+      sex,
       height_cm: computedHeightCm,
       weight_kg: computedWeightKg,
       height_unit_pref: heightUnit,
@@ -418,6 +422,21 @@ export default function OnboardingPage() {
                     onAnimationStart={(e) => { if (e.animationName === 'onAutoFillStart') setAge(e.currentTarget.value) }}
                     className="w-full mt-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-amber-400/50"
                   />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-white/50 uppercase tracking-wider">Sex</label>
+                    <UnitToggle
+                      options={[
+                        { value: 'male', label: 'Male' },
+                        { value: 'female', label: 'Female' },
+                      ]}
+                      value={sex}
+                      onChange={(v) => setSex(v as 'male' | 'female')}
+                    />
+                  </div>
+                  <p className="text-[10px] text-white/40 mt-1">Used for your calorie/BMR math — that&apos;s it.</p>
                 </div>
 
                 <div>
