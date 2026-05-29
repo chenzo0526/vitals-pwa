@@ -7,12 +7,14 @@ import { ChevronLeft, Send, Mic, MicOff, Sparkles, Loader2, Check } from 'lucide
 
 type Msg = { role: 'user' | 'assistant'; content: string; actions?: string[] }
 
+// Ordered strongest-first: the top chips land even with zero logged data (they lean on
+// the user's profile/goal), so a first-timer gets a real "this reads me" answer immediately.
 const SUGGESTIONS = [
-  'What have I eaten today?',
-  'How many calories do I have left?',
-  'Should I train legs today?',
-  "How's my recovery looking?",
+  'What should I eat today to hit my goal?',
   'Log a protein shake and 2 eggs',
+  'Should I train today, or rest?',
+  'How many calories do I have left?',
+  "How's my recovery looking?",
 ]
 
 export default function ChatPage() {
