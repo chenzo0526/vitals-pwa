@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Anthropic from '@anthropic-ai/sdk'
+import { friendlyAiError } from '@/lib/aiError'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -105,6 +106,7 @@ Rules:
     return NextResponse.json(plan)
   } catch (err) {
     console.error('[generate-program] error:', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Generation failed' }, { status: 500 })
+    const ai = friendlyAiError(err, 'build your program')
+    return NextResponse.json({ error: ai.message, code: ai.code }, { status: ai.status })
   }
 }

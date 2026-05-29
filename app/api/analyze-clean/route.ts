@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { analyzeImageWithClaude, CLEAN_FOOD_PROMPT } from '@/lib/claude'
+import { friendlyAiError } from '@/lib/aiError'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(JSON.parse(jsonMatch[0]))
   } catch (err) {
     console.error('[analyze-clean] error:', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Analysis failed' }, { status: 500 })
+    const ai = friendlyAiError(err, 'check that food')
+    return NextResponse.json({ error: ai.message, code: ai.code }, { status: ai.status })
   }
 }
