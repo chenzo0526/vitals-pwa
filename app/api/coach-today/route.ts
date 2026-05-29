@@ -164,7 +164,7 @@ export async function GET(req: NextRequest) {
     const inferredGoal = inferCalorieGoal(onboardingRes.data?.first_goal ?? null)
     const calTarget = computeCalorieTarget({
       age: identity.age ? Number(identity.age) : null,
-      sex: 'male',
+      sex: identity.sex === 'female' ? 'female' : 'male',
       weight_kg: identity.weight_kg ? Number(identity.weight_kg) : null,
       height_cm: identity.height_cm ? Number(identity.height_cm) : null,
       training_days_per_week: rhythm.training_days_per_week ? Number(rhythm.training_days_per_week) : null,
@@ -178,7 +178,7 @@ export async function GET(req: NextRequest) {
       profile: {
         display_name: profile?.display_name || null,
         age: identity.age ?? null,
-        sex: 'male', // Vitals' MVP user-base is hormone-optimization-focused males; we'll widen this later
+        sex: identity.sex === 'female' ? 'female' : 'male', // defaults male (MVP user-base) but honors profile
         height_cm: identity.height_cm ?? null,
         weight_kg: identity.weight_kg ?? null,
         training_days_per_week: rhythm.training_days_per_week ?? null,

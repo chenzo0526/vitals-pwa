@@ -164,7 +164,7 @@ export default function HomePage() {
         }
         const target = computeCalorieTarget({
           age: identity.age ? Number(identity.age) : null,
-          sex: 'male',
+          sex: identity.sex === 'female' ? 'female' : 'male',
           weight_kg: identity.weight_kg ? Number(identity.weight_kg) : null,
           height_cm: identity.height_cm ? Number(identity.height_cm) : null,
           training_days_per_week: rhythm.training_days_per_week ? Number(rhythm.training_days_per_week) : null,
