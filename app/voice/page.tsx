@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { supabase, getCurrentUserId } from '@/lib/supabase'
 import { useToast } from '@/components/Toast'
 import { celebrateConfetti } from '@/lib/confetti'
-import { resolveLogDate, readDateParamFromUrl } from '@/lib/logDate'
+import { resolveLogDate, readDateParamFromUrl, logDateLabel } from '@/lib/logDate'
 import LogDateBanner from '@/components/LogDateBanner'
 
 type ParsedItem = {
@@ -185,11 +185,12 @@ export default function VoicePage() {
     if (!parsed) return
     setLogging(true)
     setError(null)
+    const addedText = logCtx.isToday ? 'Added to today.' : `Added to ${logDateLabel(logCtx.dateStr)}.`
     try {
       await doInsert(parsed)
       setLogged(true)
       celebrateConfetti()
-      toast({ kind: 'success', title: 'Logged', text: 'Added to today.' })
+      toast({ kind: 'success', title: 'Logged', text: addedText })
       setTimeout(() => router.push('/'), 1100)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not save log'
@@ -201,7 +202,7 @@ export default function VoicePage() {
         onRetry: () => doInsert(parsed).then(() => {
           setLogged(true)
           celebrateConfetti()
-          toast({ kind: 'success', title: 'Logged', text: 'Added to today.' })
+          toast({ kind: 'success', title: 'Logged', text: addedText })
           setTimeout(() => router.push('/'), 1100)
         }),
       })

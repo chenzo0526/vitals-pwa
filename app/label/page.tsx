@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
 import { supabase, getCurrentUserId } from '@/lib/supabase'
-import { resolveLogDate, readDateParamFromUrl } from '@/lib/logDate'
+import { resolveLogDate, readDateParamFromUrl, logDateLabel } from '@/lib/logDate'
 import LogDateBanner from '@/components/LogDateBanner'
 import { Toast, ToastMsg } from '@/components/Toast'
 
@@ -91,7 +91,7 @@ export default function LabelPage() {
       })
       if (insertErr) throw new Error(insertErr.message)
       setLogged(true)
-      setToast({ id: Date.now(), kind: 'success', text: 'Logged to today' })
+      setToast({ id: Date.now(), kind: 'success', text: logCtx.isToday ? 'Logged to today' : `Logged to ${logDateLabel(logCtx.dateStr)}` })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not save log'
       setError(msg)
