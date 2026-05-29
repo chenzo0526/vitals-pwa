@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { supabase, getCurrentUserId } from '@/lib/supabase'
-import { resolveLogDate, readDateParamFromUrl } from '@/lib/logDate'
+import { resolveLogDate, readDateParamFromUrl, logDateLabel } from '@/lib/logDate'
 import LogDateBanner from '@/components/LogDateBanner'
 import { useToast } from '@/components/Toast'
 import { compressImage, formatBytes } from '@/lib/images'
@@ -134,11 +134,12 @@ export default function FoodPage() {
     if (!analysis) return
     setLogging(true)
     setError(null)
+    const addedText = logCtx.isToday ? 'Added to today.' : `Added to ${logDateLabel(logCtx.dateStr)}.`
     try {
       await doInsert(analysis)
       setLogged(true)
       celebrateConfetti()
-      toast({ kind: 'success', title: 'Logged', text: 'Added to today.' })
+      toast({ kind: 'success', title: 'Logged', text: addedText })
       setTimeout(() => router.push('/'), 1100)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not save log'
@@ -150,7 +151,7 @@ export default function FoodPage() {
         onRetry: () => doInsert(analysis).then(() => {
           setLogged(true)
           celebrateConfetti()
-          toast({ kind: 'success', title: 'Logged', text: 'Added to today.' })
+          toast({ kind: 'success', title: 'Logged', text: addedText })
           setTimeout(() => router.push('/'), 1100)
         }),
       })
