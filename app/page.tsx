@@ -56,6 +56,29 @@ export default function HomePage() {
   const [loggedYesterday, setLoggedYesterday] = useState(true) // assume true until known (avoid catch-up flash)
 
   useEffect(() => {
+    // Paint instantly from cached home payload (last visit). Then refresh in the background.
+    // Eliminates the "loads forever" feel between navigations.
+    try {
+      const cached = localStorage.getItem('vitals:home:v2')
+      if (cached) {
+        const c = JSON.parse(cached) as {
+          today?: typeof today; calTarget?: CalorieTargetResult | null; bio?: BioSnapshot | null;
+          baseline?: typeof baseline; weeklyAvgCals?: number | null; streak?: number;
+          checkedInToday?: boolean; openWorkout?: OpenWorkout | null; profile?: UserProfile | null
+        }
+        if (c.today) setToday(c.today)
+        if (c.calTarget !== undefined) setCalTarget(c.calTarget)
+        if (c.bio !== undefined) setBio(c.bio)
+        if (c.baseline) setBaseline(c.baseline)
+        if (c.weeklyAvgCals != null) setWeeklyAvgCals(c.weeklyAvgCals)
+        if (c.streak != null) setStreak(c.streak)
+        if (c.checkedInToday != null) setCheckedInToday(c.checkedInToday)
+        if (c.openWorkout !== undefined) setOpenWorkout(c.openWorkout)
+        if (c.profile) setProfile(c.profile)
+        setLoading(false) // we have something to render — no skeleton flash
+      }
+    } catch { /* private mode / first visit */ }
+
     async function fetchAll() {
       try {
         const dateStr = getLocalDateString()
@@ -194,6 +217,12 @@ export default function HomePage() {
         }
         setStreak(st)
       } finally {
+        // Persist freshly-fetched home payload so the next mount paints instantly.
+        try {
+          localStorage.setItem('vitals:home:v2', JSON.stringify({
+            today, calTarget, bio, baseline, weeklyAvgCals, streak, checkedInToday, openWorkout, profile,
+          }))
+        } catch { /* noop */ }
         setLoading(false)
       }
     }
@@ -392,7 +421,29 @@ export default function HomePage() {
         </Link>
       )}
 
-      {/* Proactive check-in nudge — drives FRESH input so the coach isn't recycling stale data */}
+      
+      {/* Meal nudge — if you haven't logged in the current meal window yet, one-tap to log it via chat */}
+      {!needsOnboarding && !loading && (() => {
+        const h = new Date().getHours()
+        const meal = h >= 5 && h < 11 ? 'breakfast' : h >= 11 && h < 15 ? 'lunch' : h >= 17 && h < 22 ? 'dinner' : null
+        if (!meal) return null
+        const eaten = todayItems.some((i) => i.item !== 'Water')
+        if (eaten) return null
+        return (
+          <Link
+            href={`/chat?q=${encodeURIComponent(`Log my ${meal}: `)}`}
+            className="flex items-center gap-2.5 rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.06] px-4 py-2.5 hover:brightness-110 transition-all active:scale-[0.99]"
+          >
+            <span className="text-lg">🍽️</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-white leading-tight">Haven&apos;t logged {meal} yet — tap to talk it in</p>
+              <p className="text-[11px] text-white/45 leading-tight">e.g. &ldquo;2 eggs, oatmeal, shake&rdquo; · 5 seconds</p>
+            </div>
+            <ChevronRight size={16} className="text-white/30 flex-shrink-0" />
+          </Link>
+        )
+      })()}
+{/* Proactive check-in nudge — drives FRESH input so the coach isn't recycling stale data */}
       {!needsOnboarding && !loading && !checkedInToday && (
         <Link
           href="/journal"
