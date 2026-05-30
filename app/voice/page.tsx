@@ -238,7 +238,7 @@ export default function VoicePage() {
           )}
         </button>
         <p className="text-white/40 text-xs text-center">
-          {recording ? 'Recording… tap to stop (auto-stops after 3s silence)' : 'Tap to start recording'}
+          {recording ? 'Recording… tap to stop' : 'Tap to start. Take your time — natural pauses are fine.'}
         </p>
       </div>
 

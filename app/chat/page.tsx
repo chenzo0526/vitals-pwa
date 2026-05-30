@@ -28,7 +28,7 @@ export default function ChatPage() {
 function ChatInner() {
   const params = useSearchParams()
   const [messages, setMessages] = useState<Msg[]>([])
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(() => { if (typeof window === 'undefined') return ''; try { return new URLSearchParams(window.location.search).get('q') || '' } catch { return '' } })
   const [sending, setSending] = useState(false)
   const [recording, setRecording] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -127,6 +127,7 @@ function ChatInner() {
         {messages.length === 0 && (
           <div className="space-y-4 pt-4">
             <p className="text-center text-xs text-white/40">Log by talking. Ask anything. I know your food, training, recovery, and stack.</p>
+            <p className="text-center text-[10px] text-white/30 px-2">Tip: be specific but don&apos;t stress portions. Say what you ate — fist of chicken, half a bowl of oatmeal, a scoop of whey — the AI estimates within ~20%. Adjust if it&apos;s way off.</p>
             <div className="space-y-2">
               {SUGGESTIONS.map((s) => (
                 <button

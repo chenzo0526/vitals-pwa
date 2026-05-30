@@ -25,6 +25,18 @@ async function getSupabase() {
   )
 }
 
+
+function resolveLogTs(forDate: unknown): string {
+  if (typeof forDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(forDate)) {
+    const today = new Date().toISOString().slice(0, 10)
+    if (forDate <= today) {
+      // Noon on that local day so timezone day-boundary doesn't slip.
+      return new Date(`${forDate}T12:00:00`).toISOString()
+    }
+  }
+  return new Date().toISOString()
+}
+
 const TOOLS: Anthropic.Tool[] = [
   {
     name: 'log_food',
@@ -40,6 +52,7 @@ const TOOLS: Anthropic.Tool[] = [
         water_ml: { type: 'number', description: 'Water content in ml if a drink, else 0' },
         sodium_mg: { type: 'number', description: 'Estimated sodium in mg' },
         potassium_mg: { type: 'number', description: 'Estimated potassium in mg' },
+        for_date: { type: 'string', description: "Date in YYYY-MM-DD if logging to a past day (e.g. 'yesterday' -> compute it). Omit for today." },
       },
       required: ['summary', 'calories', 'protein_g', 'carbs_g', 'fat_g'],
     },
@@ -49,7 +62,7 @@ const TOOLS: Anthropic.Tool[] = [
     description: "Log water intake when the user says they drank water (e.g. 'I drank a liter', 'log 500ml water', 'had a glass of water' = ~250ml).",
     input_schema: {
       type: 'object',
-      properties: { ml: { type: 'number' } },
+      properties: { ml: { type: 'number' }, for_date: { type: 'string', description: "YYYY-MM-DD if logging to a past day. Omit for today." } },
       required: ['ml'],
     },
   },
@@ -186,6 +199,8 @@ WHO YOU ARE
 
 WHAT YOU CAN DO
 - LOG things when they tell you: log_food (estimate macros yourself — never ask for numbers), log_water, or log_workout (parse every exercise + set). Made a mistake? delete_last_food removes the most recent log. After logging, confirm in ONE line with the running daily total vs target (or the workout summary).
+- DATE-AWARE LOGGING: if the user says 'yesterday', 'last night', 'two days ago', or names a date, log to THAT day by passing for_date as YYYY-MM-DD on the tool call. Compute the date from today's local date in their context. If they don't mention a date, log to today (omit for_date).
+- PORTION GUIDANCE: people rarely weigh food. If their description is vague, estimate using common reference sizes (a "fist of chicken" ~ 4oz/170g protein source, a "palm" ~ 3oz, half a bowl of oatmeal ~ 1 cup cooked, a "scoop" of protein ~ 25-30g, a "drizzle" of olive oil ~ 1 tbsp). Quietly ASSUME and log. Only ask for clarification if the food itself is ambiguous (e.g. 'soup' — what kind?), NEVER for portion size; just estimate sensibly. After logging, mention the assumption in your confirmation: e.g. 'Logged ~6oz chicken, 1 cup rice, broccoli — 520 kcal. Adjust if portions were way off.'
 - ANSWER from their data: what they've eaten, calories/protein left, recovery, recent training, stack, body comp. Use real numbers from the context.
 - COACH: if they ask whether to train / how recovered they are / what to eat, give a clear call using recovery + recent training + soreness cues.
 
@@ -232,7 +247,7 @@ ${JSON.stringify(context, null, 2)}`
         try {
           if (tu.name === 'log_food') {
             const { error } = await supabase.from('intake_events').insert({
-              user_id: userId, ts: new Date().toISOString(),
+              user_id: userId, ts: resolveLogTs(input.for_date),
               item: String(input.summary || 'Logged via chat'),
               qty_text: 'via chat',
               calories: Math.round(Number(input.calories) || 0),
@@ -250,7 +265,7 @@ ${JSON.stringify(context, null, 2)}`
           } else if (tu.name === 'log_water') {
             const ml = Math.round(Number(input.ml) || 0)
             const { error } = await supabase.from('intake_events').insert({
-              user_id: userId, ts: new Date().toISOString(), item: 'Water', qty_text: `${ml} ml`,
+              user_id: userId, ts: resolveLogTs(input.for_date), item: 'Water', qty_text: `${ml} ml`,
               calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, water_ml: ml, parsed_by: 'chat', raw_input: '',
             })
             if (error) throw new Error(error.message)

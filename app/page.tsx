@@ -40,10 +40,19 @@ export default function HomePage() {
   })
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
-  const [loading, setLoading] = useState(true)
+  // Hydrate any cached home payload SYNCHRONOUSLY before first paint.
+  // Eliminates the baseline-checklist flash + skeleton flicker on every open.
+  const cachedHome = (() => {
+    if (typeof window === 'undefined') return null
+    try {
+      const raw = localStorage.getItem('vitals:home:v2')
+      return raw ? JSON.parse(raw) as { today?: { calories_total: number; protein_g_total: number; carbs_g_total: number; fat_g_total: number; water_ml_total: number }; calTarget?: CalorieTargetResult | null; bio?: BioSnapshot | null; baseline?: BaselineStatus; weeklyAvgCals?: number | null; streak?: number; checkedInToday?: boolean; openWorkout?: OpenWorkout | null; profile?: UserProfile | null } : null
+    } catch { return null }
+  })()
+  const [loading, setLoading] = useState(!cachedHome)
   const [openWorkout, setOpenWorkout] = useState<OpenWorkout | null>(null)
   const [nextScheduled, setNextScheduled] = useState<NextScheduledWorkout | null>(null)
-  const [baseline, setBaseline] = useState<BaselineStatus>({ hasPhysique: false, hasSubstances: false, hasBloodwork: false })
+  const [baseline, setBaseline] = useState<BaselineStatus>(cachedHome?.baseline || { hasPhysique: false, hasSubstances: false, hasBloodwork: false })
   const [addingWater, setAddingWater] = useState<number | null>(null)  // ml of pending add for the spinner
   const [calTarget, setCalTarget] = useState<CalorieTargetResult | null>(null)
   const [bio, setBio] = useState<BioSnapshot | null>(null)
@@ -639,12 +648,12 @@ export default function HomePage() {
           so we don't nag someone who already logged. Keeps the coach's data honest. */}
       {!needsOnboarding && !loading && !loggedYesterday && (
         <Link
-          href={`/food-search?date=${yesterdayStr()}`}
+          href={`/chat?q=${encodeURIComponent('Log my meals for YESTERDAY: ')}`}
           className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 hover:bg-white/[0.06] transition-colors active:scale-[0.99]"
         >
           <div className="flex items-center gap-2.5">
             <Calendar size={15} className="text-white/40" />
-            <span className="text-xs text-white/60">Forgot to log yesterday? <span className="text-white/80 font-semibold">Catch up</span></span>
+            <span className="text-xs text-white/60">Forgot to log yesterday? <span className="text-white/80 font-semibold">Voice-log it</span></span>
           </div>
           <ChevronRight size={14} className="text-white/30" />
         </Link>

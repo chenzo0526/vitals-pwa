@@ -249,6 +249,7 @@ export default function FoodPage() {
               {analysis.confidence} confidence
             </Badge>
           </div>
+          <p className="text-[10px] text-white/35 leading-snug">AI estimate from the photo — expect ~20% margin on portions. Tap any item to fix the name or numbers. For precision, weigh portions.</p>
 
           {analysis.items.map((item, i) => (
             <motion.div
